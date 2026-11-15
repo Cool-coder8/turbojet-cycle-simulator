@@ -11,7 +11,7 @@ class Station:
         self.Pt = None     # stagnation pressure
 
         #Flow properties
-        self.mdot = None   # mass flow rate
+        self.mdot = None   # mass flow rate (total mass flow rate of air and fuel)
         self.M = None      # Mach number
         self.airvelocity = None # Velocity of air
         self.rho = None    # Density

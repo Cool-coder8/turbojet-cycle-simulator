@@ -1,8 +1,8 @@
 # Turbojet Simulator Equation Reference
 
-This reference describes the equations currently implemented in the simulator, along with the simplifying assumptions and equations that are still pending.
+This document describes equations currently used by the simulator and identifies modeling assumptions and unfinished features.
 
-All calculations use SI units. The model uses an ideal gas with constant properties:
+Calculations use SI units and ideal-gas properties, with the following defaults on each `Station`:
 
 | Symbol | Value | Meaning |
 |---|---:|---|
@@ -10,11 +10,9 @@ All calculations use SI units. The model uses an ideal gas with constant propert
 | \(c_p\) | 1004 J/(kg·K) | Specific heat at constant pressure |
 | \(R\) | 287 J/(kg·K) | Gas constant for air |
 
-These are the defaults assigned to each `Station`.
-
 ## Atmosphere
 
-`isa_atmosphere(altitude)` in `atmosphere.py` calculates static properties using a single tropospheric lapse-rate layer:
+`isa_atmosphere(altitude)` in `atmosphere.py` uses a single tropospheric lapse-rate layer:
 
 \[
 T = T_0 - Lh
@@ -35,86 +33,66 @@ P = P_0\left(\frac{T}{T_0}\right)^{g/(LR)}
 - \(g = 9.81\ \text{m/s}^2\)
 - \(R = 287\ \text{J/(kg·K)}\)
 
-The implementation rounds temperature and pressure to two decimal places and density to four. It uses this one layer only; higher ISA layers and explicit altitude-range validation are not implemented.
+The implementation rounds \(T\) and \(P\) to two decimal places and \(\rho\) to four. It does not validate the input altitude or implement higher ISA layers.
 
 ## Freestream / Station 0
 
-`main.py` sets the flight Mach number and atmospheric state on Station 0, then calculates sound speed, flight velocity, and stagnation conditions.
+The program prompts for altitude and Mach number and obtains \(T\), \(P\), and \(\rho\) from the atmosphere model.
 
-### Speed of sound
+### Speed of sound and flight velocity
 
 \[
 a = \sqrt{\gamma R T}
 \]
 
-- \(a\): speed of sound (m/s)
-- \(T\): static temperature (K)
-- \(R\): gas constant (J/(kg·K))
-- \(\gamma\): ratio of specific heats
-
-### Flight velocity
-
 \[
-V = M a
+V_a = Ma
 \]
 
-- \(V\): freestream velocity (m/s)
-- \(M\): freestream Mach number
+Here \(a\) is speed of sound, \(M\) is flight Mach number, and \(V_a\) is freestream/aircraft velocity. The code rounds both \(a\) and \(V_a\) to two decimal places.
 
 ### Stagnation temperature
 
 \[
-T_t = T\left(1 + \frac{\gamma - 1}{2}M^2\right)
+T_{t0} = T\left(1+\frac{\gamma-1}{2}M^2\right)
 \]
-
-- \(T_t\): stagnation temperature (K)
-- \(T\): static temperature (K)
 
 ### Stagnation pressure
 
 \[
-P_t = P\left(1 + \frac{\gamma - 1}{2}M^2\right)^{\gamma/(\gamma-1)}
+P_{t0} = P\left(1+\frac{\gamma-1}{2}M^2\right)^{\gamma/(\gamma-1)}
 \]
 
-- \(P_t\): stagnation pressure (Pa)
-- \(P\): static pressure (Pa)
-
-Both stagnation relations assume steady, isentropic deceleration of a perfect gas with constant \(\gamma\). `main.py` rounds sound speed, velocity, and stagnation properties to two decimal places.
+These are ideal-gas, isentropic stagnation relations. The program rounds \(T_{t0}\) and \(P_{t0}\) to two decimal places.
 
 ## Mass Flow Rate
 
-Purpose: Determine the airflow entering the engine.
-
-Equation:
+The user supplies inlet area \(A\). Freestream air mass flow is calculated as:
 
 \[
-\dot{m} = \rho A V
+\dot{m}_0 = \rho A V_a
 \]
 
-Variables:
+- \(\dot{m}_0\): freestream air mass flow rate (kg/s)
+- \(\rho\): air density (kg/m³)
+- \(A\): inlet area (m²)
+- \(V_a\): freestream velocity (m/s)
 
-- \(\dot{m}\): air mass flow rate (kg/s)
-- \(\rho\): freestream air density (kg/m³)
-- \(A\): user-provided inlet area (m²)
-- \(V\): freestream velocity (m/s)
-
-Physical meaning: Mass flow rate determines how much air enters the engine and directly affects the thrust estimate.
-
-`main.py` calculates this at Station 0 and rounds it to two decimal places.
+The calculated mass flow is rounded to two decimal places and propagated through the inlet and compressor.
 
 ## Inlet / Station 0 → Station 2
 
-`Inlet.calculate` implements an ideal inlet for total properties:
+The inlet currently copies total properties and mass flow:
 
 \[
-T_{t2} = T_{t0}, \qquad P_{t2} = P_{t0}
+T_{t2}=T_{t0},\qquad P_{t2}=P_{t0},\qquad \dot{m}_2=\dot{m}_0
 \]
 
-There is no pressure recovery factor or loss model. The inlet currently copies only total temperature and pressure; Station 2 static properties and velocity are not calculated.
+An inlet efficiency is configured but not used in the current calculation. Pressure recovery and inlet losses are not modeled.
 
 ## Compressor / Station 2 → Station 3
 
-`Compressor` is initialized with compressor pressure ratio \(\pi_c\).
+The compressor uses pressure ratio \(\pi_c\) and efficiency \(\eta_c\).
 
 ### Total pressure
 
@@ -122,263 +100,187 @@ There is no pressure recovery factor or loss model. The inlet currently copies o
 P_{t3} = \pi_c P_{t2}
 \]
 
-\[
-\pi_c = \frac{P_{t3}}{P_{t2}}
-\]
-
-### Total temperature
+### Isentropic and actual total temperature
 
 \[
-T_{t3} = T_{t2}\left(\frac{P_{t3}}{P_{t2}}\right)^{(\gamma-1)/\gamma}
-= T_{t2}\pi_c^{(\gamma-1)/\gamma}
+T_{t3s}=T_{t2}\pi_c^{(\gamma-1)/\gamma}
 \]
 
-This relation assumes isentropic compression and constant specific heats.
+\[
+T_{t3}=T_{t2}+\frac{T_{t3s}-T_{t2}}{\eta_c}
+\]
+
+For \(\eta_c<1\), the actual compressor temperature rise is larger than the isentropic rise. This models compressor isentropic efficiency.
 
 ### Specific compressor work
 
 \[
-w_c = c_p(T_{t3} - T_{t2})
+w_c = c_p(T_{t3}-T_{t2})
 \]
 
-- \(w_c\): specific compressor work (J/kg)
+- \(w_c\): compressor work per unit air mass (J/kg)
 - \(c_p\): specific heat at constant pressure
 
-The simulator calculates and stores `Compressor.work`; `main.py` reports it. This is a thermodynamic specific-work calculation, not a blade-speed/Euler calculation.
+The program rounds \(T_{t3}\) and \(w_c\) to two decimal places, and propagates \(\dot{m}_2\) to Station 3.
 
 ## Combustor / Station 3 → Station 4
 
-Purpose: Add thermal energy to the airflow through fuel combustion.
-
-Inputs:
-
-- \(P_{t3}\)
-- \(T_{t3}\)
-- Desired \(T_{t4}\)
-
-Outputs:
-
-- \(P_{t4}\)
-- \(T_{t4}\)
-- Fuel-air ratio \(f\)
-
-Assumptions:
-
-- Ideal combustor with constant-pressure combustion
-- \(P_{t4} = P_{t3}\)
-- Constant \(c_p\) and \(\gamma\)
-- Constant fuel heating value
-- Combustor efficiency \(\eta_b = 1.0\) in the current run
-
-`Combustor` is initialized with a specified turbine-inlet total temperature \(T_{t4}\) and combustion efficiency \(\eta_b\). It uses a Jet A lower heating value assumption:
-
-\[
-Q_R = 43 \times 10^6\ \text{J/kg}
-\]
-
-### Combustor exit temperature
-
-\[
-T_{t4} = \text{user-defined design value}
-\]
-
-The turbine inlet temperature is specified as a design parameter. The combustor adds sufficient fuel to reach this temperature.
-
-### Combustor exit pressure
-
-\[
-P_{t4} = P_{t3}
-\]
-
-The model neglects combustor pressure loss.
-
-### Fuel-air ratio
-
-Equation:
-
-\[
-f = \frac{c_p(T_{t4} - T_{t3})}{\eta_b Q_R - c_p T_{t4}}
-\]
-
-Variables:
-
-- \(f\): fuel-to-air mass ratio
-- \(c_p\): specific heat capacity at constant pressure
-- \(T_{t3}\), \(T_{t4}\): combustor inlet and exit total temperatures
-- \(\eta_b\): combustion efficiency
-- \(Q_R\): fuel lower heating value
-
-Physical meaning: Fuel-air ratio determines how much fuel must be burned to raise the total temperature from \(T_{t3}\) to \(T_{t4}\).
-
-Current assumptions:
-
-- \(\eta_b = 1.0\)
-- \(Q_R = 43 \times 10^6\ \text{J/kg}\)
-
-This is a simplified steady-flow combustor balance using constant \(c_p\); it does not model variable gas properties or pressure loss. The calculated `f` is rounded to two decimal places when stored on Station 4.
-
-Example result for altitude 10,000 m and flight Mach 0.8:
-
-- \(T_{t4} = 1400\ \text{K}\)
-- \(P_{t4} = 402974.5\ \text{Pa}\)
-- \(f = 0.02\)
-
-## Turbine / Station 4 → Station 5
-
-Purpose: Extract work from the hot gas stream to drive the compressor.
-
-Inputs:
-
-- \(P_{t4}\)
-- \(T_{t4}\)
-- Compressor work
-
-Outputs:
-
-- \(P_{t5}\)
-- \(T_{t5}\)
-
-Assumptions:
-
-- Ideal turbine
-- Turbine work equals compressor work
-- Constant \(c_p\) and \(\gamma\)
-- No mechanical losses
-
-`Turbine.calculate` receives Station 4 and the compressor's specific work. The current turbine model balances that work using the same constant \(c_p\), without accounting for fuel mass in the turbine flow.
-
-### Turbine work balance
-
-\[
-w_t = w_c
-\]
-
-Equation used:
-
-\[
-c_p(T_{t4} - T_{t5}) = w_t
-\]
-
-Rearranged:
-
-\[
-T_{t5} = T_{t4} - \frac{w_t}{c_p}
-\]
-
-Physical meaning: The turbine extracts just enough work from the flow to drive the compressor.
-
-### Turbine pressure ratio
-
-\[
-\frac{T_{t5}}{T_{t4}} = \left(\frac{P_{t5}}{P_{t4}}\right)^{(\gamma-1)/\gamma}
-\]
-
-Rearranged:
-
-\[
-P_{t5} = P_{t4}\left(\frac{T_{t5}}{T_{t4}}\right)^{\gamma/(\gamma-1)}
-\]
-
-Physical meaning: Pressure decreases as the turbine extracts energy from the flow. This is the isentropic total-pressure/total-temperature relation applied to turbine expansion. No turbine efficiency, cooling flow, or pressure-loss correction is included. Station 5 also receives the fuel-air ratio from Station 4.
-
-Example results for altitude 10,000 m and flight Mach 0.8:
-
-- \(T_{t5} = 1165.73\ \text{K}\)
-- \(P_{t5} = 212286.49\ \text{Pa}\)
-
-## Nozzle / Station 5 → Station 8
-
-Purpose: Convert thermal and pressure energy into exhaust velocity.
-
-Current assumption: Choked converging nozzle, with exit Mach number \(M_e=1\) when the main-program choking check passes.
-
-### Critical pressure ratio
-
-\[
-\frac{P_t}{P_{\text{crit}}}
-= \left(\frac{\gamma+1}{2}\right)^{\gamma/(\gamma-1)}
-\]
-
-For air with \(\gamma=1.4\):
-
-\[
-\frac{P_t}{P_{\text{crit}}} \approx 1.893
-\]
-
-The main program compares \(P_{t5}/P_{\text{ambient}}\) with this ratio. If the threshold is exceeded, it sets \(M_e=1\). There is no unchoked-flow branch; the nozzle calculation always uses the choked relations below.
-
-### Exit temperature
-
-\[
-T_e = T_{t5}\left(\frac{2}{\gamma+1}\right)
-\]
-
-This follows from the stagnation-temperature relation at Mach 1.
+The combustor uses target temperature \(T_{t4}\), efficiency \(\eta_b\), burner pressure ratio \(\beta_b\), and fuel lower heating value \(Q_R=43\times10^6\ \text{J/kg}\).
 
 ### Exit pressure
 
 \[
-P_e = \frac{P_{t5}}{\left((\gamma+1)/2\right)^{\gamma/(\gamma-1)}}
+P_{t4}=\beta_b P_{t3}
 \]
 
-This is the exit pressure for the assumed choked converging nozzle.
+The current configuration uses \(\beta_b=1.0\), i.e. no total-pressure loss. Values below 1 represent a pressure loss in this model.
 
-### Exit velocity
+### Fuel-air ratio
 
 \[
-V_e = \sqrt{2c_p(T_{t5}-T_e)}
+f = \frac{c_p(T_{t4}-T_{t3})}{\eta_b Q_R-c_pT_{t4}}
 \]
 
-This converts the drop in total temperature into kinetic energy using constant \(c_p\).
+- \(f\): fuel-to-air mass ratio
+- \(\eta_b\): combustor efficiency
+- \(Q_R\): fuel lower heating value
 
-`Nozzle.calculate` stores \(T_e\), \(P_e\), and \(V_e\) in Station 8's static temperature, static pressure, and air-velocity fields, respectively, and copies \(f\) from Station 5. It does not set \(M_e\); `main.py` sets it to 1 only if the pressure-ratio check passes.
+The current configuration uses \(\eta_b=1.0\). The code rounds \(f\) to eight decimal places.
 
-## Thrust
-
-Purpose: Estimate net engine thrust from the change in stream momentum.
-
-The momentum equation specified for the model is:
+### Fuel addition and mass flow
 
 \[
-F = (1+f)\dot{m}V_e - \dot{m}V_a
+\dot{m}_4=\dot{m}_3(1+f)
 \]
 
-Variables:
+This treats Station 3 flow as air flow and adds fuel mass at the combustor.
 
-- \(F\): thrust (N)
-- \(f\): fuel-air ratio
-- \(\dot{m}\): air mass flow rate (kg/s)
-- \(V_e\): nozzle exit velocity (m/s)
-- \(V_a\): aircraft/freestream velocity (m/s)
+## Turbine / Station 4 → Station 5
 
-Physical meaning: Thrust results from increasing the momentum of the airflow passing through the engine.
+The turbine uses compressor specific work \(w_c\) and turbine efficiency \(\eta_t\).
 
-Implementation note: `main.py` currently evaluates
+### Work balance and actual exit temperature
+
+The turbine work is set equal to compressor work:
 
 \[
-F_{\text{code}} = (1+f)\dot{m}(V_e - V_a)
+w_t=w_c
 \]
 
-which differs from the equation above. The current program output follows \(F_{\text{code}}\). Neither form includes pressure thrust.
+Because combustor exit mass flow includes fuel, the code calculates:
+
+\[
+T_{t5}=T_{t4}-\frac{w_t}{c_p(1+f)}
+\]
+
+This accounts for the fuel-added mass when converting work per unit air mass to turbine temperature drop.
+
+### Isentropic exit temperature and pressure
+
+\[
+T_{t5s}=T_{t4}-\frac{T_{t4}-T_{t5}}{\eta_t}
+\]
+
+\[
+P_{t5}=P_{t4}\left(\frac{T_{t5s}}{T_{t4}}\right)^{\gamma/(\gamma-1)}
+\]
+
+For \(\eta_t<1\), the isentropic temperature drop needed to produce the actual work is larger; the pressure relation uses \(T_{t5s}\). The code rounds \(P_{t5}\) to two decimal places and propagates mass flow and \(f\) to Station 5.
+
+## Nozzle / Station 5 → Station 8
+
+The main program checks the ratio of turbine-exit total pressure to ambient pressure:
+
+\[
+\frac{P_{t5}}{P_0} >
+\left(\frac{\gamma+1}{2}\right)^{\gamma/(\gamma-1)}
+\]
+
+For \(\gamma=1.4\), the critical ratio is approximately 1.893. When the check passes, the program uses the choked converging-nozzle calculation and sets \(M_e=1\). If it fails, the program calls `calculate_unchoked`, which is currently only a placeholder; unchoked operation is not implemented end to end.
+
+### Choked nozzle temperature and efficiency
+
+The ideal critical temperature is:
+
+\[
+T_{t8s}=T_{t5}\frac{2}{\gamma+1}
+\]
+
+The implemented nozzle efficiency correction is:
+
+\[
+T_8=T_{t5}-\eta_n(T_{t5}-T_{t8s})
+\]
+
+For \(\eta_n=1\), this reduces to the ideal choked temperature. For lower efficiency, the calculated temperature is higher and the velocity is lower.
+
+### Exit pressure and velocity
+
+The code calculates:
+
+\[
+P_8=P_{t5}\left(\frac{T_8}{T_{t5}}\right)^{\gamma/(\gamma-1)}
+\]
+
+\[
+V_8=\sqrt{2c_p(T_{t5}-T_8)}
+\]
+
+This is the project's simplified efficiency-adjusted choked-nozzle model; it applies the isentropic pressure-temperature relation using the efficiency-adjusted temperature. Nozzle efficiency in the current configuration is 1.0. The calculation propagates mass flow and fuel-air ratio to Station 8.
+
+## Engine Performance
+
+### Thrust
+
+The code calculates momentum thrust as:
+
+\[
+F=\dot{m}_8V_8-\dot{m}_0V_a
+\]
+
+Station 8 mass flow includes fuel, while freestream flow is air only. Pressure thrust is not included.
+
+### Thrust-specific fuel consumption
+
+\[
+\text{TSFC} = \frac{f\dot{m}_0}{F}\times3600
+\]
+
+The reported units are kg/(N·hr).
+
+### Thermal efficiency
+
+\[
+\eta_{th} =
+\frac{\left((1+f)V_8^2 - V_a^2\right)/2}{fQ_R}
+\]
+
+### Propulsive and overall efficiency
+
+\[
+\eta_p = \frac{2V_a}{V_8+V_a}
+\]
+
+\[
+\eta_o = \eta_{th}\eta_p
+\]
+
+These are simplified ideal-jet performance relations and do not account for pressure thrust.
 
 ## Future Improvements
 
-- Pressure-thrust term
-- TSFC
-- Component efficiencies and pressure losses
-- Nozzle efficiency
-- Separate choked and unchoked nozzle solutions
-- Extended ISA atmosphere layers above 11 km
+- Implement unchoked nozzle expansion and complete choking control
+- Add inlet pressure recovery/loss
+- Add pressure thrust
+- Implement multi-layer ISA atmosphere
+- Add engine configuration files
+- Add checks for valid operating inputs and degenerate performance conditions
 
 ## Simplifying assumptions and limitations
 
-- Ideal-gas air with constant \(\gamma\), \(c_p\), and \(R\)
-- Single-layer tropospheric atmosphere intended for 0–11,000 m
-- Ideal inlet with no total-pressure loss
-- Isentropic compressor and turbine relations
-- No combustor pressure loss
-- Turbine work balance neglects the added fuel mass
-- No cooling bleed, afterburner, or component maps
-- Choked converging-nozzle relations, with no unchoked exit-state solution
-- Thrust estimate excludes pressure thrust
-- No TSFC or component efficiency model
+- Ideal gas with constant \(\gamma\), \(c_p\), and \(R\)
+- Single-layer tropospheric atmosphere intended for 0–11,000 m; input is not range-validated
+- Inlet efficiency is configured but unused
+- Compressor, combustor, turbine, and nozzle have efficiency/pressure-ratio calculation inputs; current run values are all ideal
+- Unchoked nozzle method is unimplemented
+- Thrust excludes pressure thrust

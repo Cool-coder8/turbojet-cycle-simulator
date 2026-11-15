@@ -3,15 +3,18 @@ from station import Station
 
 class Compressor:
 
-    def __init__(self, pressure_ratio):
+    def __init__(self, pressure_ratio, efficiency):
 
         self.pressure_ratio = pressure_ratio
+        self.efficiency = efficiency 
         self.work = None
 
     def calculate(self, station2):
 
         station3 = Station(3)
-        Tt3 = (station2.Tt) * (self.pressure_ratio ** ((station3.gamma - 1) / station3.gamma))
+        station3.mdot = station2.mdot
+        Tt3s = (station2.Tt) * (self.pressure_ratio ** ((station3.gamma - 1) / station3.gamma))
+        Tt3 = station2.Tt + (Tt3s - station2.Tt) / self.efficiency
         station3.Tt = round(Tt3, 2)
         Pt3 = (station2.Pt) * self.pressure_ratio
         station3.Pt = Pt3
