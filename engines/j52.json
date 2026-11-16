@@ -14,5 +14,7 @@
 
     "inlet_efficiency": 0.98,
 
+    "inlet_area": 0.7314,
+
     "notes": "Verified OPR (14.6:1 for P-408; 12.0:1 on earlier P-6/P-8 models). TT4 (1220 K) is thermodynamically back-calculated from published thrust (11,200 lbf) and TSFC (0.79)."
 }

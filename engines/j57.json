@@ -14,5 +14,7 @@
 
     "inlet_efficiency": 0.98,
 
+    "inlet_area": 0.8316,
+
     "notes": "Verified OPR (11.5–13.0 depending on variant, 12.5 nominal) and TT4 (1150 K) from J57-P-21/23 data. Component efficiencies are 1950s two-spool axial baselines."
 }

@@ -14,5 +14,7 @@
 
     "inlet_efficiency": 0.95,
 
+    "inlet_area": 1.2668,
+
     "notes": "Verified takeoff OPR (8.8:1) and max TT4 (2,000 F / 1366 K). Note: Above Mach 2.2, 4th-stage compressor bleed bypasses core directly to afterburner."
 }
