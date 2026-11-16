@@ -1,0 +1,18 @@
+{
+    "name": "Rolls-Royce/Snecma Olympus 593 Mk 610",
+
+    "compressor_pr": 15.5,
+    "compressor_efficiency": 0.86,
+
+    "combustor_tt4": 1355,
+    "combustor_efficiency": 0.99,
+    "combustor_pressure_ratio": 0.95,
+
+    "turbine_efficiency": 0.89,
+
+    "nozzle_efficiency": 0.98,
+
+    "inlet_efficiency": 0.96,
+
+    "notes": "Verified static OPR (15.5:1; drops to ~11.3 at Mach 2 cruise). Cruise TT4 is 1355 K (1,980 F); peak takeoff TT4 reaches 1723 K (1,450 C) with air-cooled turbine blades."
+}

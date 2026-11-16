@@ -1,0 +1,18 @@
+{
+    "name": "General Electric J79",
+
+    "compressor_pr": 13.5,
+    "compressor_efficiency": 0.84,
+
+    "combustor_tt4": 1210,
+    "combustor_efficiency": 0.98,
+    "combustor_pressure_ratio": 0.95,
+
+    "turbine_efficiency": 0.88,
+
+    "nozzle_efficiency": 0.97,
+
+    "inlet_efficiency": 0.98,
+
+    "notes": "Verified OPR (13.5:1) and TT4 (1,710 F / 1210 K) from J79-GE-17 specs. Single-spool with variable stator vanes; efficiencies are 1960s axial baselines."
+}

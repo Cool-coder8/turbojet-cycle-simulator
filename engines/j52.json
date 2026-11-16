@@ -1,0 +1,18 @@
+{
+    "name": "Pratt & Whitney J52 (JT8A)",
+
+    "compressor_pr": 14.6,
+    "compressor_efficiency": 0.84,
+
+    "combustor_tt4": 1220,
+    "combustor_efficiency": 0.98,
+    "combustor_pressure_ratio": 0.95,
+
+    "turbine_efficiency": 0.88,
+
+    "nozzle_efficiency": 0.97,
+
+    "inlet_efficiency": 0.98,
+
+    "notes": "Verified OPR (14.6:1 for P-408; 12.0:1 on earlier P-6/P-8 models). TT4 (1220 K) is thermodynamically back-calculated from published thrust (11,200 lbf) and TSFC (0.79)."
+}

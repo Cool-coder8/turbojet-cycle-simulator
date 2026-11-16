@@ -1,0 +1,18 @@
+{
+    "name": "Bristol Siddeley Orpheus 803",
+
+    "compressor_pr": 4.4,
+    "compressor_efficiency": 0.81,
+
+    "combustor_tt4": 913,
+    "combustor_efficiency": 0.97,
+    "combustor_pressure_ratio": 0.95,
+
+    "turbine_efficiency": 0.85,
+
+    "nozzle_efficiency": 0.97,
+
+    "inlet_efficiency": 0.98,
+
+    "notes": "Verified OPR (4.4:1) and max continuous TT4 (640 C / 913 K; takeoff peak ~1050 K). Simple 7-stage single-spool axial compressor with single-stage turbine."
+}

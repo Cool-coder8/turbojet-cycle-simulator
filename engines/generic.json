@@ -1,0 +1,16 @@
+{
+    "name": "Generic Turbojet",
+
+    "compressor_pr": 9,
+    "compressor_efficiency": 0.79,
+
+    "combustor_tt4": 1400,
+    "combustor_efficiency": 1.0,
+    "combustor_pressure_ratio": 1.0,
+
+    "turbine_efficiency": 1.0,
+
+    "nozzle_efficiency": 1.0,
+
+    "inlet_efficiency": 1.0
+}

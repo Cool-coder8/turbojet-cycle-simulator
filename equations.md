@@ -1,6 +1,6 @@
 # Turbojet Simulator Equation Reference
 
-This document describes equations currently used by the simulator and identifies modeling assumptions and unfinished features.
+This document describes equations currently used by the simulator and identifies modeling assumptions and unfinished features. Engine design parameters are loaded at runtime from a selected JSON file in `engines/`.
 
 Calculations use SI units and ideal-gas properties, with the following defaults on each `Station`:
 
@@ -34,6 +34,18 @@ P = P_0\left(\frac{T}{T_0}\right)^{g/(LR)}
 - \(R = 287\ \text{J/(kg·K)}\)
 
 The implementation rounds \(T\) and \(P\) to two decimal places and \(\rho\) to four. It does not validate the input altitude or implement higher ISA layers.
+
+## Engine Configuration
+
+At startup, `main.py` loads the selected `engines/<name>.json` file. The presets currently available are:
+
+- Generic Turbojet
+- Pratt & Whitney J52, J57, and J58
+- General Electric J79
+- Rolls-Royce/Snecma Olympus 593
+- Bristol Siddeley Orpheus
+
+The JSON parameters include compressor pressure ratio and efficiency, combustor exit total temperature, combustor efficiency and pressure ratio, turbine efficiency, nozzle efficiency, and inlet efficiency. These values are selected per engine rather than set as component parameters directly in `main.py`.
 
 ## Freestream / Station 0
 
@@ -92,9 +104,7 @@ This models stagnation-pressure recovery with unchanged total temperature.
 
 ## Compressor / Station 2 → Station 3
 
-The compressor uses pressure ratio \(\pi_c\) and efficiency \(\eta_c\).
-
-In the current `main.py` configuration, \(\pi_c=1.2\) and \(\eta_c=0.7\).
+The compressor uses pressure ratio \(\pi_c\) and efficiency \(\eta_c\), loaded from the selected engine configuration.
 
 ### Total pressure
 
@@ -135,7 +145,7 @@ The combustor uses target temperature \(T_{t4}\), efficiency \(\eta_b\), burner 
 P_{t4}=\beta_b P_{t3}
 \]
 
-The current configuration uses \(\beta_b=1.0\), i.e. no total-pressure loss. Values below 1 represent a pressure loss in this model.
+The selected configuration supplies \(\beta_b\). A value of 1.0 means no total-pressure loss; values below 1 represent pressure loss in this model.
 
 ### Fuel-air ratio
 
@@ -147,7 +157,7 @@ f = \frac{c_p(T_{t4}-T_{t3})}{\eta_b Q_R-c_pT_{t4}}
 - \(\eta_b\): combustor efficiency
 - \(Q_R\): fuel lower heating value
 
-The current configuration uses \(\eta_b=1.0\). The code rounds \(f\) to eight decimal places.
+The selected configuration supplies \(\eta_b\). The code rounds \(f\) to eight decimal places.
 
 ### Fuel addition and mass flow
 
@@ -228,7 +238,7 @@ P_8=P_{t5}\left(\frac{T_8}{T_{t5}}\right)^{\gamma/(\gamma-1)}
 V_8=\sqrt{2c_p(T_{t5}-T_8)}
 \]
 
-This is the project's simplified efficiency-adjusted choked-nozzle model; it applies the isentropic pressure-temperature relation using the efficiency-adjusted temperature. Nozzle efficiency in the current configuration is 1.0.
+This is the project's simplified efficiency-adjusted choked-nozzle model; it applies the isentropic pressure-temperature relation using the efficiency-adjusted temperature. Nozzle efficiency comes from the selected engine configuration.
 
 ### Unchoked flow
 
@@ -321,14 +331,25 @@ These are simplified ideal-jet performance relations; pressure thrust is include
 - Improve the nozzle-loss model
 - Add an optional nozzle pressure-recovery model
 - Implement multi-layer ISA atmosphere
-- Add engine configuration files
+- Populate engine presets with validated data and default inlet areas
+- Improve engine comparison functionality
 - Add checks for valid operating inputs and degenerate performance conditions
+- Extend performance modeling to turbofans, afterburners, compressor/turbine maps, and off-design operation
 
 ## Simplifying assumptions and limitations
 
 - Ideal gas with constant \(\gamma\), \(c_p\), and \(R\)
 - Single-layer tropospheric atmosphere intended for 0–11,000 m; input is not range-validated
 - Inlet, compressor, combustor, turbine, and nozzle use simplified efficiency/pressure-ratio models
-- Current run uses \(\eta_c=0.7\); inlet, combustor, turbine, and nozzle efficiencies and burner pressure ratio are 1.0
+- Component parameters vary by selected JSON engine preset
 - Unchoked nozzle method is implemented, but warns rather than switching branches if \(M_8\ge1\)
 - Thrust includes pressure thrust; other model simplifications remain
+
+## Version 1.2 Progress
+
+- Added JSON engine configuration loading and runtime engine selection.
+- Added Generic Turbojet, J52, J57, J58, J79, Olympus 593, and Orpheus presets.
+- Added inlet pressure recovery, \(P_{t2}=\eta_{\text{inlet}}P_{t0}\), with \(T_{t2}=T_{t0}\).
+- Added nozzle exit density and continuity-based exit area for pressure-thrust calculations.
+- Added momentum and pressure thrust reporting.
+- Validated representative choked and unchoked nozzle cases and the expected thrust reduction when inlet efficiency is reduced.

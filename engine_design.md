@@ -30,7 +30,23 @@ Station 8
 Engine performance
 ```
 
-`main.py` prompts for altitude, flight Mach number, and inlet area. It then calculates Station 0 and calls each component in sequence. The compressor pressure ratio is 1.2, compressor efficiency is 0.7, combustor exit total temperature is 1400 K, and the inlet, combustor, turbine, and nozzle efficiencies and burner pressure ratio are configured as 1.0.
+At startup, `main.py` selects and loads an engine JSON configuration from `engines/`. It then prompts for altitude, flight Mach number, and inlet area, calculates Station 0, and calls each component in sequence. Compressor ratio, design \(T_{t4}\), component efficiencies, and combustor pressure ratio come from the selected preset rather than being hardcoded in `main.py`.
+
+## Engine Configuration
+
+The current engine database contains:
+
+| Selection | Engine |
+|---|---|
+| `generic` | Generic Turbojet |
+| `j52` | Pratt & Whitney J52 |
+| `j57` | Pratt & Whitney J57 |
+| `j58` | Pratt & Whitney J58 |
+| `j79` | General Electric J79 |
+| `olympus593` | Rolls-Royce/Snecma Olympus 593 |
+| `orpheus` | Bristol Siddeley Orpheus |
+
+Each JSON file supplies the engine name, compressor pressure ratio and efficiency, combustor exit total temperature, combustor efficiency and pressure ratio, turbine efficiency, nozzle efficiency, and inlet efficiency. The engine data is intended for comparison; validation against published engine performance is still future work.
 
 ## Stations and components
 
@@ -71,7 +87,7 @@ This models stagnation-pressure recovery while assuming adiabatic flow with unch
 
 ### Compressor — Station 2 → Station 3
 
-The compressor pressure ratio \(\pi_c\) is configured in `main.py` as 1.2. The isentropic outlet temperature and actual outlet temperature are:
+The compressor pressure ratio \(\pi_c\) and efficiency \(\eta_c\) are loaded from the selected engine configuration. The isentropic outlet temperature and actual outlet temperature are:
 
 \[
 T_{t3s} = T_{t2}\pi_c^{(\gamma-1)/\gamma}
@@ -91,7 +107,7 @@ P_{t3} = \pi_c P_{t2}
 w_c = c_p(T_{t3}-T_{t2})
 \]
 
-The code rounds \(T_{t3}\) and \(w_c\) to two decimal places. It also propagates mass flow to Station 3. Compressor efficiency is configurable; the current setting is 0.7.
+The code rounds \(T_{t3}\) and \(w_c\) to two decimal places. It also propagates mass flow to Station 3. Compressor efficiency is configurable per engine preset.
 
 ### Station 3 — compressor exit
 
@@ -136,7 +152,7 @@ f = \frac{c_p(T_{t4}-T_{t3})}{\eta_b Q_R-c_pT_{t4}}
 \dot{m}_4 = \dot{m}_3(1+f)
 \]
 
-The fuel heating value is \(Q_R=43\times10^6\ \text{J/kg}\). Combustor efficiency and burner pressure ratio are configurable; both are 1.0 in the current run. The fuel-air ratio is rounded to eight decimal places before mass flow is calculated.
+The fuel heating value is \(Q_R=43\times10^6\ \text{J/kg}\). Combustor efficiency and burner pressure ratio are configurable per engine preset. The fuel-air ratio is rounded to eight decimal places before mass flow is calculated.
 
 ### Station 4 — combustor exit / turbine inlet
 
@@ -176,7 +192,7 @@ T_{t5s} = T_{t4} - \frac{T_{t4}-T_{t5}}{\eta_t}
 P_{t5} = P_{t4}\left(\frac{T_{t5s}}{T_{t4}}\right)^{\gamma/(\gamma-1)}
 \]
 
-Station 5 mass flow is copied from Station 4, and \(f\) is propagated. Turbine efficiency is configurable; the current setting is 1.0. No mechanical losses or cooling flow are modeled.
+Station 5 mass flow is copied from Station 4, and \(f\) is propagated. Turbine efficiency is configurable per engine preset. No mechanical losses or cooling flow are modeled.
 
 ### Station 5 — turbine exit
 
@@ -227,7 +243,7 @@ It applies nozzle efficiency as:
 T_8=T_{t5}-\eta_n(T_{t5}-T_{t8s})
 \]
 
-and derives velocity and Mach number from the calculated exit temperature. Both nozzle methods calculate exit density from \(\rho_8=P_8/(R T_8)\) and area from \(A_8=\dot{m}_8/(\rho_8 V_8)\). The current nozzle efficiency is 1.0. The unchoked method warns on \(M_e\ge1\), but does not choose a different branch automatically.
+and derives velocity and Mach number from the calculated exit temperature. Both nozzle methods calculate exit density from \(\rho_8=P_8/(R T_8)\) and area from \(A_8=\dot{m}_8/(\rho_8 V_8)\). Nozzle efficiency comes from the selected engine configuration. The unchoked method warns on \(M_e\ge1\), but does not choose a different branch automatically.
 
 ### Station 8 — nozzle exit
 
@@ -291,7 +307,7 @@ These are simplified ideal-jet performance relations; pressure thrust is include
 - Single-layer tropospheric atmosphere intended for 0–11,000 m; input is not range-validated
 - Inlet total-pressure recovery is modeled as \(P_{t2}=\eta_{\text{inlet}}P_{t0}\), with \(T_{t2}=T_{t0}\)
 - Configurable compressor, combustor, turbine, and choked-nozzle efficiency models
-- Current compressor efficiency is 0.7; inlet, combustor, turbine, and nozzle efficiencies and burner pressure ratio are set to 1.0
+- Component efficiencies and burner pressure ratio are loaded from the selected engine preset
 - Fuel mass is included in turbine flow and Station 8 mass flow
 - Both choked and unchoked nozzle calculations are implemented; the unchoked method warns rather than automatically changing branches if \(M_e\ge1\)
 - Thrust includes pressure thrust
@@ -312,6 +328,28 @@ Implemented:
 - ✅ Thrust, TSFC, thermal efficiency, propulsive efficiency, and overall efficiency
 
 ## Recent Progress
+
+### Version 1.2 Progress Update
+
+#### Major Features Added
+
+- Added JSON engine configuration loading from the `engines/` directory and runtime engine selection.
+- Added presets for the Generic Turbojet, Pratt & Whitney J52/J57/J58, General Electric J79, Rolls-Royce/Snecma Olympus 593, and Bristol Siddeley Orpheus.
+- Added non-ideal inlet total-pressure recovery while conserving total temperature.
+- Added nozzle exit density and continuity-based exit area.
+- Added momentum and pressure thrust to reported engine performance.
+
+#### Validation Completed
+
+- Choked nozzle cases were checked for \(P_e>P_{\text{ambient}}\) and positive pressure thrust.
+- Unchoked cases were checked for \(P_e=P_{\text{ambient}}\), zero pressure thrust, and \(M_e<1\).
+- Reduced inlet efficiency was checked to reduce \(P_{t2}\), \(P_{t5}\), and thrust.
+
+The checks cover the tested operating cases; engine preset data and edge cases still need broader validation.
+
+#### Current Simulator Capability
+
+Atmosphere → Freestream → Inlet → Compressor → Combustor → Turbine → Nozzle → Geometry Calculations → Momentum Thrust → Pressure Thrust → TSFC → Thermal Efficiency → Propulsive Efficiency → Overall Efficiency
 
 ### Nozzle Improvements
 
@@ -383,15 +421,15 @@ This models stagnation-pressure loss while maintaining total temperature.
 
 ### High Priority
 
-- JSON engine configuration files
-- Multiple predefined engine presets
-- Validation against real turbojet data
+- Populate the engine database with validated engine data
+- Add default inlet areas to engine JSON files
+- Improve engine comparison functionality
 
 ### Medium Priority
 
 - Improved nozzle-loss model
-- Nozzle pressure-recovery option
 - Multi-layer ISA atmosphere
+- Better handling of edge-case nozzle expansions
 
 ### Long-Term
 
@@ -399,4 +437,4 @@ This models stagnation-pressure loss while maintaining total temperature.
 - Afterburner support
 - Compressor and turbine maps
 - Geometry-based flowpath sizing
-- Multi-spool engine architectures
+- Off-design performance analysis

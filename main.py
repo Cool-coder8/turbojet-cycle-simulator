@@ -6,21 +6,40 @@ from combustor import Combustor
 from turbine import Turbine
 from nozzle import Nozzle
 from atmosphere import isa_atmosphere
+import json
+
+
+engine_name = str(input("Select Engine(generic, j52, j57, j58, j79, olympus593, orpheus): "))
+
+with open(f"engines/{engine_name}.json") as f:
+    engine = json.load(f)
 
 
 station0 = Station(0)
 
-inlet = Inlet(1.0)  
-compressor = Compressor(1.2, 0.7)
-combustor = Combustor(1400, 1.0, 1.0)
-turbine = Turbine(1.0)
-nozzle = Nozzle(1.0)
+inlet = Inlet(
+    engine["inlet_efficiency"]
+)
+compressor = Compressor(
+    engine["compressor_pr"],
+    engine["compressor_efficiency"]
+)
+combustor = Combustor(
+    engine["combustor_tt4"],
+    engine["combustor_efficiency"],
+    engine["combustor_pressure_ratio"]
+)
+turbine = Turbine(
+    engine["turbine_efficiency"]
+)
+nozzle = Nozzle(
+    engine["nozzle_efficiency"]
+)
+
 
 altitude = int(input("Enter altitude (m): from 0-11000): "))
 
 T, P, rho = isa_atmosphere(altitude)
-
-station0 = Station(0)
 
 station0.T = T
 station0.P = P
