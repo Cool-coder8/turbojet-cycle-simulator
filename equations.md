@@ -82,17 +82,19 @@ The calculated mass flow is rounded to two decimal places and propagated through
 
 ## Inlet / Station 0 → Station 2
 
-The inlet currently copies total properties and mass flow:
+The inlet copies total temperature and mass flow and applies inlet efficiency \(\eta_{\text{inlet}}\) to total pressure:
 
 \[
-T_{t2}=T_{t0},\qquad P_{t2}=P_{t0},\qquad \dot{m}_2=\dot{m}_0
+T_{t2}=T_{t0},\qquad P_{t2}=\eta_{\text{inlet}}P_{t0},\qquad \dot{m}_2=\dot{m}_0
 \]
 
-An inlet efficiency is configured but not used in the current calculation. Pressure recovery and inlet losses are not modeled.
+This models stagnation-pressure recovery with unchanged total temperature.
 
 ## Compressor / Station 2 → Station 3
 
 The compressor uses pressure ratio \(\pi_c\) and efficiency \(\eta_c\).
+
+In the current `main.py` configuration, \(\pi_c=1.2\) and \(\eta_c=0.7\).
 
 ### Total pressure
 
@@ -196,7 +198,7 @@ The main program checks the ratio of turbine-exit total pressure to ambient pres
 \left(\frac{\gamma+1}{2}\right)^{\gamma/(\gamma-1)}
 \]
 
-For \(\gamma=1.4\), the critical ratio is approximately 1.893. When the check passes, the program uses the choked converging-nozzle calculation and sets \(M_e=1\). If it fails, the program calls `calculate_unchoked`, which is currently only a placeholder; unchoked operation is not implemented end to end.
+For \(\gamma=1.4\), the critical ratio is approximately 1.893. When the check passes, the program uses the choked converging-nozzle calculation and sets \(M_e=1\). If it fails, the program calls the unchoked calculation.
 
 ### Choked nozzle temperature and efficiency
 
@@ -226,19 +228,65 @@ P_8=P_{t5}\left(\frac{T_8}{T_{t5}}\right)^{\gamma/(\gamma-1)}
 V_8=\sqrt{2c_p(T_{t5}-T_8)}
 \]
 
-This is the project's simplified efficiency-adjusted choked-nozzle model; it applies the isentropic pressure-temperature relation using the efficiency-adjusted temperature. Nozzle efficiency in the current configuration is 1.0. The calculation propagates mass flow and fuel-air ratio to Station 8.
+This is the project's simplified efficiency-adjusted choked-nozzle model; it applies the isentropic pressure-temperature relation using the efficiency-adjusted temperature. Nozzle efficiency in the current configuration is 1.0.
+
+### Unchoked flow
+
+When \(P_{t5}/P_{\text{ambient}}\) is at or below the critical ratio, `calculate_unchoked` sets:
+
+\[
+P_8=P_{\text{ambient}}
+\]
+
+It calculates the isentropic exit temperature corresponding to that pressure:
+
+\[
+T_{t8s}=T_{t5}\left(\frac{P_8}{P_{t5}}\right)^{(\gamma-1)/\gamma}
+\]
+
+The actual exit temperature accounts for nozzle efficiency:
+
+\[
+T_8=T_{t5}-\eta_n(T_{t5}-T_{t8s})
+\]
+
+Then:
+
+\[
+V_8=\sqrt{2c_p(T_{t5}-T_8)}
+\]
+
+\[
+M_8=\sqrt{\frac{2}{\gamma-1}\left(\frac{T_{t5}}{T_8}-1\right)}
+\]
+
+The function warns if \(M_8\ge1\), but does not automatically switch to the choked calculation.
+
+### Exit density and area
+
+Both nozzle branches calculate:
+
+\[
+\rho_8=\frac{P_8}{RT_8}
+\]
+
+\[
+A_8=\frac{\dot{m}_8}{\rho_8V_8}
+\]
+
+Mass flow and fuel-air ratio are propagated to Station 8.
 
 ## Engine Performance
 
 ### Thrust
 
-The code calculates momentum thrust as:
+The code calculates momentum thrust plus pressure thrust:
 
 \[
-F=\dot{m}_8V_8-\dot{m}_0V_a
+F = \dot{m}_8V_8 - \dot{m}_0V_a + (P_8-P_{\text{ambient}})A_8
 \]
 
-Station 8 mass flow includes fuel, while freestream flow is air only. Pressure thrust is not included.
+Station 8 mass flow includes fuel, while freestream flow is air only. In the unchoked branch, \(P_8=P_{\text{ambient}}\), so the pressure-thrust term is zero.
 
 ### Thrust-specific fuel consumption
 
@@ -265,13 +313,13 @@ The reported units are kg/(N·hr).
 \eta_o = \eta_{th}\eta_p
 \]
 
-These are simplified ideal-jet performance relations and do not account for pressure thrust.
+These are simplified ideal-jet performance relations; pressure thrust is included in the thrust calculation but not in these efficiency formulas.
 
 ## Future Improvements
 
-- Implement unchoked nozzle expansion and complete choking control
-- Add inlet pressure recovery/loss
-- Add pressure thrust
+- Improve choking control for cases where the unchoked solution reaches \(M_8\ge1\)
+- Improve the nozzle-loss model
+- Add an optional nozzle pressure-recovery model
 - Implement multi-layer ISA atmosphere
 - Add engine configuration files
 - Add checks for valid operating inputs and degenerate performance conditions
@@ -280,7 +328,7 @@ These are simplified ideal-jet performance relations and do not account for pres
 
 - Ideal gas with constant \(\gamma\), \(c_p\), and \(R\)
 - Single-layer tropospheric atmosphere intended for 0–11,000 m; input is not range-validated
-- Inlet efficiency is configured but unused
-- Compressor, combustor, turbine, and nozzle have efficiency/pressure-ratio calculation inputs; current run values are all ideal
-- Unchoked nozzle method is unimplemented
-- Thrust excludes pressure thrust
+- Inlet, compressor, combustor, turbine, and nozzle use simplified efficiency/pressure-ratio models
+- Current run uses \(\eta_c=0.7\); inlet, combustor, turbine, and nozzle efficiencies and burner pressure ratio are 1.0
+- Unchoked nozzle method is implemented, but warns rather than switching branches if \(M_8\ge1\)
+- Thrust includes pressure thrust; other model simplifications remain

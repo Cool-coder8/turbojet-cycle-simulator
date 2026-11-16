@@ -10,8 +10,8 @@ from atmosphere import isa_atmosphere
 
 station0 = Station(0)
 
-inlet = Inlet(1.0)  #not implemented yet, but will be used later for isentropic efficiency calculations
-compressor = Compressor(10, 1.0)
+inlet = Inlet(1.0)  
+compressor = Compressor(1.2, 0.7)
 combustor = Combustor(1400, 1.0, 1.0)
 turbine = Turbine(1.0)
 nozzle = Nozzle(1.0)
@@ -64,20 +64,22 @@ station5.display()
 
 
 pressure_ratio = station5.Pt/station0.P
-critical_ratio = ((station5.gamma + 1)/2)**(station5.gamma/(station5.gamma-1))
+critical_ratio = ((station5.gamma + 1)/2)**(station5.gamma/(station5.gamma-1)) # should be about 1.893
 if pressure_ratio > critical_ratio:
     choked = True
     station8 = nozzle.calculate_choked(station5)
     station8.M = 1 #assuming converging nozzle
 else:
     choked = False
-    station8 = nozzle.calculate_unchoked(station5)
+    station8 = nozzle.calculate_unchoked(station5, station0.P)
     #implement later, but for now just assume choked flow
 
 station8.display()
 
 #General Engine Performance Calculations
-thrust = (station8.mdot * station8.airvelocity) - (station0.mdot *station0.airvelocity)
+momentum_thrust = (station8.mdot * station8.airvelocity) - (station0.mdot * station0.airvelocity)
+pressure_thrust = (station8.area*(station8.P - station0.P))
+thrust = momentum_thrust + pressure_thrust
 sfc = (((station8.f * station0.mdot)/thrust) * 3600)  # kg/(N.hr)
 nth = ((((1+station8.f)*(station8.airvelocity**2)) - (station0.airvelocity**2))/2)/(station8.f*combustor.QR) # thermal efficiency
 np = 2*station0.airvelocity/(station8.airvelocity + station0.airvelocity) # propulsive efficiency
@@ -86,6 +88,8 @@ overall_efficiency = nth * np
 print("\nFinal Important Values:")
 print(f"Thrust: {thrust:.2f} N")
 print(f"SFC: {sfc:.8f} kg/(N.hr)")
-print(f"Thermal Efficiency: {nth:.4f}")
-print(f"Propulsive Efficiency: {np:.4f}")
-print(f"Overall Efficiency: {overall_efficiency:.4f}")
+print(f"Thermal Efficiency: {(nth*100):.4f}%")
+print(f"Propulsive Efficiency: {(np*100):.4f}%")
+print(f"Overall Efficiency: {(overall_efficiency*100):.4f}%")
+print(f"momentum_thrust: {momentum_thrust}")
+print(f"pressure_thrust: {pressure_thrust}")

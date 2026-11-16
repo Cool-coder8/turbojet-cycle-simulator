@@ -30,7 +30,7 @@ Station 8
 Engine performance
 ```
 
-`main.py` prompts for altitude, flight Mach number, and inlet area. It then calculates Station 0 and calls each component in sequence. The compressor pressure ratio is 10, combustor exit total temperature is 1400 K, and the current component efficiencies and burner pressure ratio are configured as 1.0.
+`main.py` prompts for altitude, flight Mach number, and inlet area. It then calculates Station 0 and calls each component in sequence. The compressor pressure ratio is 1.2, compressor efficiency is 0.7, combustor exit total temperature is 1400 K, and the inlet, combustor, turbine, and nozzle efficiencies and burner pressure ratio are configured as 1.0.
 
 ## Stations and components
 
@@ -61,17 +61,17 @@ The atmosphere uses a single tropospheric lapse-rate layer intended for 0–11,0
 
 ### Inlet — Station 0 → Station 2
 
-`Inlet.calculate` copies total temperature, total pressure, and mass flow from Station 0:
+`Inlet.calculate` copies total temperature and mass flow from Station 0 and applies the configured inlet efficiency to total pressure:
 
 \[
-T_{t2} = T_{t0}, \qquad P_{t2} = P_{t0}, \qquad \dot{m}_2 = \dot{m}_0
+T_{t2} = T_{t0}, \qquad P_{t2} = \eta_{\text{inlet}}P_{t0}, \qquad \dot{m}_2 = \dot{m}_0
 \]
 
-The inlet assumes ideal flow. An inlet efficiency value is passed in `main.py` but is not currently used; inlet pressure recovery and losses are future work.
+This models stagnation-pressure recovery while assuming adiabatic flow with unchanged total temperature.
 
 ### Compressor — Station 2 → Station 3
 
-The compressor pressure ratio \(\pi_c\) is configured in `main.py` as 10. The isentropic outlet temperature and actual outlet temperature are:
+The compressor pressure ratio \(\pi_c\) is configured in `main.py` as 1.2. The isentropic outlet temperature and actual outlet temperature are:
 
 \[
 T_{t3s} = T_{t2}\pi_c^{(\gamma-1)/\gamma}
@@ -91,7 +91,7 @@ P_{t3} = \pi_c P_{t2}
 w_c = c_p(T_{t3}-T_{t2})
 \]
 
-The code rounds \(T_{t3}\) and \(w_c\) to two decimal places. It also propagates mass flow to Station 3. Compressor efficiency is configurable; the current setting is 1.0.
+The code rounds \(T_{t3}\) and \(w_c\) to two decimal places. It also propagates mass flow to Station 3. Compressor efficiency is configurable; the current setting is 0.7.
 
 ### Station 3 — compressor exit
 
@@ -195,7 +195,7 @@ The main program compares \(P_{t5}/P_{\text{ambient}}\) with the critical pressu
 \left(\frac{\gamma+1}{2}\right)^{\gamma/(\gamma-1)}
 \]
 
-If the ratio is greater than the critical value, it calls `calculate_choked` and sets \(M_e=1\). Otherwise it calls `calculate_unchoked`, which is currently a placeholder (`pass`), so unchoked operation is not yet supported end to end.
+If the ratio is greater than the critical value, it calls `calculate_choked` and sets \(M_e=1\). Otherwise it calls `calculate_unchoked` with ambient pressure. The unchoked calculation sets exit pressure equal to ambient and computes exit temperature, velocity, Mach number, density, and area. It prints a warning if the calculated exit Mach number is at least 1; it does not automatically switch to the choked branch in that case.
 
 For the choked converging-nozzle calculation, the code determines the ideal critical temperature and applies nozzle efficiency \(\eta_n\):
 
@@ -215,30 +215,44 @@ P_8 = P_{t5}\left(\frac{T_8}{T_{t5}}\right)^{\gamma/(\gamma-1)}
 V_8 = \sqrt{2c_p(T_{t5}-T_8)}
 \]
 
-The choked calculation copies mass flow and fuel-air ratio to Station 8. Nozzle efficiency is configurable; the current setting is 1.0. This is a simplified model; the exit pressure relation applies the isentropic pressure-temperature relation to the efficiency-adjusted temperature.
+For unchoked flow, the code sets \(P_8=P_{\text{ambient}}\), then calculates the isentropic temperature corresponding to that pressure:
+
+\[
+T_{t8s}=T_{t5}\left(\frac{P_8}{P_{t5}}\right)^{(\gamma-1)/\gamma}
+\]
+
+It applies nozzle efficiency as:
+
+\[
+T_8=T_{t5}-\eta_n(T_{t5}-T_{t8s})
+\]
+
+and derives velocity and Mach number from the calculated exit temperature. Both nozzle methods calculate exit density from \(\rho_8=P_8/(R T_8)\) and area from \(A_8=\dot{m}_8/(\rho_8 V_8)\). The current nozzle efficiency is 1.0. The unchoked method warns on \(M_e\ge1\), but does not choose a different branch automatically.
 
 ### Station 8 — nozzle exit
 
-Known properties in the choked branch:
+Known properties:
 
 - Exit pressure \(P_8\), stored as static pressure
 - Exit temperature \(T_8\), stored as static temperature
 - Exit velocity \(V_8\)
-- Exit Mach number \(M_e=1\)
+- Exit Mach number \(M_e=1\) for the choked branch, or calculated from the temperature ratio for the unchoked branch
 - Air-plus-fuel mass flow rate
 - Fuel-air ratio \(f\)
+- Exit density \(\rho_8\)
+- Exit area \(A_8\)
 
 ## Engine Performance
 
 ### Thrust
 
-The current momentum thrust calculation is:
+The current thrust calculation combines momentum and pressure thrust:
 
 \[
-F = \dot{m}_8 V_8 - \dot{m}_0 V_a
+F = \dot{m}_8 V_8 - \dot{m}_0 V_a + (P_8-P_a)A_8
 \]
 
-Station 8 mass flow includes fuel; Station 0 mass flow is air only. Pressure thrust is not included.
+Station 8 mass flow includes fuel; Station 0 mass flow is air only. The pressure term becomes zero when \(P_8=P_a\), as in the ideal unchoked calculation.
 
 ### TSFC
 
@@ -265,7 +279,7 @@ The reported units are kg/(N·hr).
 \eta_o = \eta_{th}\eta_p
 \]
 
-These are simplified ideal-jet performance relations; pressure thrust and losses beyond the component efficiency corrections are not represented.
+These are simplified ideal-jet performance relations; pressure thrust is included in thrust but not in these efficiency formulas.
 
 ## Station data
 
@@ -275,12 +289,12 @@ These are simplified ideal-jet performance relations; pressure thrust and losses
 
 - Ideal gas with constant \(\gamma\), \(c_p\), and \(R\)
 - Single-layer tropospheric atmosphere intended for 0–11,000 m; input is not range-validated
-- Ideal inlet; configured inlet efficiency is not used
+- Inlet total-pressure recovery is modeled as \(P_{t2}=\eta_{\text{inlet}}P_{t0}\), with \(T_{t2}=T_{t0}\)
 - Configurable compressor, combustor, turbine, and choked-nozzle efficiency models
-- Current efficiencies and burner pressure ratio are all set to 1.0
+- Current compressor efficiency is 0.7; inlet, combustor, turbine, and nozzle efficiencies and burner pressure ratio are set to 1.0
 - Fuel mass is included in turbine flow and Station 8 mass flow
-- Unchoked nozzle calculation is unimplemented
-- Thrust omits pressure thrust
+- Both choked and unchoked nozzle calculations are implemented; the unchoked method warns rather than automatically changing branches if \(M_e\ge1\)
+- Thrust includes pressure thrust
 
 ## Current Simulator Capability
 
@@ -288,20 +302,101 @@ Implemented:
 
 - ✅ Tropospheric atmosphere and freestream state
 - ✅ Mass-flow propagation and fuel addition
+- ✅ Inlet pressure recovery
 - ✅ Compressor efficiency model
 - ✅ Combustor efficiency and burner pressure-ratio model
 - ✅ Turbine efficiency and fuel-flow correction
-- ✅ Choked nozzle efficiency calculation
+- ✅ Choked and unchoked converging-nozzle calculations
+- ✅ Nozzle exit density and area
+- ✅ Momentum and pressure thrust
 - ✅ Thrust, TSFC, thermal efficiency, propulsive efficiency, and overall efficiency
 
-Next milestone:
+## Recent Progress
 
-- ➡ Unchoked nozzle model and complete choking behavior
+### Nozzle Improvements
 
-## Version 1.1 Changes
+Implemented separate nozzle operating modes:
 
-- Added non-ideal component calculation models and efficiency inputs.
-- Added burner pressure-ratio support and fuel-flow propagation.
-- Added fuel-mass correction to turbine work balance.
-- Added TSFC, thermal, propulsive, and overall efficiency calculations.
-- Added a choked-flow check and choked converging-nozzle model.
+#### Choked Flow
+
+When:
+
+\[
+\frac{P_{t5}}{P_{\text{ambient}}} > 1.893
+\]
+
+the nozzle is treated as choked:
+
+- Exit Mach number is set to 1
+- Exit pressure is determined from the choked nozzle temperature/pressure relations
+- Exit velocity is calculated from the energy equation
+- Pressure thrust is included in total thrust
+
+#### Unchoked Flow
+
+When:
+
+\[
+\frac{P_{t5}}{P_{\text{ambient}}} \le 1.893
+\]
+
+the nozzle is treated as unchoked:
+
+- Exit pressure is set equal to ambient pressure
+- Exit Mach number is calculated from static and stagnation temperatures
+- Exit velocity is calculated from the energy equation
+- Pressure thrust is zero because \(P_8=P_{\text{ambient}}\)
+
+The unchoked calculation warns if its resulting Mach number is at least 1; it does not automatically switch to the choked model.
+
+### Pressure Thrust
+
+The simulator calculates:
+
+\[
+F = \dot{m}_8 V_8 - \dot{m}_0 V_a + (P_8-P_a)A_8
+\]
+
+where the first two terms are net momentum thrust and the last term is pressure thrust. Nozzle exit area is calculated using:
+
+\[
+A_8 = \frac{\dot{m}_8}{\rho_8 V_8}, \qquad \rho_8 = \frac{P_8}{R T_8}
+\]
+
+### Inlet Model
+
+The inlet applies pressure recovery:
+
+\[
+P_{t2} = \eta_{\text{inlet}}P_{t0}
+\]
+
+while assuming:
+
+\[
+T_{t2}=T_{t0}
+\]
+
+This models stagnation-pressure loss while maintaining total temperature.
+
+## Future Work
+
+### High Priority
+
+- JSON engine configuration files
+- Multiple predefined engine presets
+- Validation against real turbojet data
+
+### Medium Priority
+
+- Improved nozzle-loss model
+- Nozzle pressure-recovery option
+- Multi-layer ISA atmosphere
+
+### Long-Term
+
+- Turbofan support
+- Afterburner support
+- Compressor and turbine maps
+- Geometry-based flowpath sizing
+- Multi-spool engine architectures

@@ -11,7 +11,7 @@ class Inlet:
 
         station2 = Station(2)
         station2.Tt = (station0.Tt)
-        station2.Pt = (station0.Pt) 
+        station2.Pt = (self.efficiency*station0.Pt) 
         station2.mdot = (station0.mdot)
 
         

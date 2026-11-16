@@ -1,8 +1,8 @@
 # Turbojet Simulator
 
-A station-based Python model of a turbojet engine cycle. It accepts altitude, flight Mach number, and inlet area, calculates the flow through the engine, and reports thrust and cycle performance.
+A station-based Python model of a turbojet engine cycle. It accepts altitude, flight Mach number, and inlet area, calculates flow through the engine, and reports thrust and cycle performance.
 
-The atmosphere uses a single tropospheric lapse-rate layer intended for 0–11,000 m; it is not a complete multi-layer ISA model. The nozzle has a choked converging-nozzle calculation and a choking check, but the unchoked calculation is not implemented yet.
+The atmosphere uses a single tropospheric lapse-rate layer intended for 0–11,000 m; it is not a complete multi-layer ISA model.
 
 ## Run
 
@@ -18,80 +18,106 @@ The project uses only the Python standard library. The program prompts for:
 - Flight Mach number
 - Inlet area (m²)
 
-The compressor pressure ratio is 10, combustor exit total temperature is 1400 K, and the current component settings in `main.py` are:
+The compressor pressure ratio is 1.2, combustor exit total temperature is 1400 K, and the current component parameters in `main.py` are:
 
-- Compressor efficiency: 1.0
+- Inlet efficiency: 1.0
+- Compressor efficiency: 0.7
 - Combustor efficiency: 1.0
-- Combustor pressure ratio: 1.0 (no pressure loss)
+- Combustor pressure ratio: 1.0
 - Turbine efficiency: 1.0
 - Nozzle efficiency: 1.0
-
-The efficiency and burner pressure-ratio models accept non-ideal values, but these current settings represent ideal components.
 
 ## Engine flow
 
 ```text
 Station 0 -> Inlet -> Station 2 -> Compressor -> Station 3
           -> Combustor -> Station 4 -> Turbine -> Station 5
-          -> Nozzle -> Station 8 -> Engine performance
+          -> Choked/unchoked Nozzle -> Station 8 -> Engine performance
 ```
 
-## Current model
+## Implemented Features
 
-Implemented:
+### Engine Components
 
-- Single-layer tropospheric atmosphere properties: temperature, pressure, and density
-- Freestream speed of sound, velocity, mass flow rate, and stagnation temperature/pressure
-- Ideal inlet transfer of total temperature, total pressure, and mass flow
-- Compressor pressure rise, isentropic-efficiency temperature correction, and specific work
-- Combustor efficiency, burner pressure ratio, fuel-air ratio, and fuel mass addition
-- Turbine work balance with fuel-flow correction and turbine isentropic-efficiency pressure calculation
-- Choked converging-nozzle exit calculation with a nozzle-efficiency correction
-- Thrust, TSFC, thermal efficiency, propulsive efficiency, and overall efficiency calculations
+- Single-layer ISA troposphere model (intended range: 0–11 km)
+- Inlet pressure recovery using an inlet efficiency factor
+- Compressor pressure ratio and isentropic efficiency
+- Combustor efficiency and total-pressure ratio
+- Fuel-air ratio calculation and fuel-flow addition
+- Turbine efficiency and power-balance model with fuel-flow correction
+- Nozzle efficiency for choked and unchoked converging-nozzle calculations
 
-Current assumptions and limitations:
+### Nozzle Models
 
-- The atmosphere uses one lapse-rate layer and is intended for 0–11,000 m; altitude input is not range-validated
-- Inlet efficiency is currently unused; inlet pressure recovery/loss is not modeled
-- Gas properties are constant
-- The current run sets component efficiencies to 1.0 and burner pressure ratio to 1.0, so it does not demonstrate non-ideal component settings
-- Unchoked nozzle flow is not implemented; selecting an unchoked condition currently reaches a placeholder
-- The thrust estimate omits pressure thrust
+- Choked converging nozzle
+- Unchoked converging nozzle
+- Automatic choking determination using the critical pressure ratio
 
-The detailed station-by-station model and limitations are in [engine_design.md](./engine_design.md). Equations and assumptions are in [equations.md](./equations.md).
+### Flow Properties
+
+- Mass-flow propagation through the engine
+- Nozzle exit density calculation
+- Nozzle exit area calculation
+
+### Performance Metrics
+
+- Momentum thrust
+- Pressure thrust
+- TSFC
+- Thermal efficiency
+- Propulsive efficiency
+- Overall efficiency
 
 ## Current Status
 
-Implemented model capabilities:
+The program displays Stations 0, 2, 3, 4, 5, and 8, compressor work, momentum thrust, pressure thrust, total thrust, TSFC, and efficiency results. Outputs depend on the entered altitude, Mach number, inlet area, and configured component parameters.
 
-- ✅ Tropospheric atmosphere model
-- ✅ Freestream state and mass-flow calculation
-- ✅ Ideal inlet flow propagation
-- ✅ Compressor isentropic-efficiency model
-- ✅ Combustor efficiency and burner pressure-ratio models
-- ✅ Fuel-air ratio and fuel addition
-- ✅ Turbine efficiency and fuel-flow correction
-- ✅ Choked nozzle efficiency calculation and choking check
-- ✅ TSFC, thermal efficiency, propulsive efficiency, and overall efficiency
+Important model limitations:
 
-The program displays Stations 0, 2, 3, 4, 5, and 8, compressor work, thrust, TSFC, and efficiency results. The default component parameters are ideal values, and results depend on the entered flight condition and inlet area.
+- The atmosphere uses one lapse-rate layer and does not model higher ISA layers
+- Inlet efficiency is applied to total pressure only; total temperature is unchanged
+- Gas properties are constant
+- The unchoked nozzle warns if its calculated exit Mach number is at least 1, but does not automatically switch back to the choked branch
+- Current thrust uses momentum and exit-pressure terms; geometry and gas-property idealizations remain
+
+The detailed station-by-station model and recent progress are in [engine_design.md](./engine_design.md). Equations and assumptions are in [equations.md](./equations.md).
 
 ## Development Log
 
+### Recent Progress
+
+- Added inlet total-pressure recovery using the inlet efficiency parameter.
+- Implemented separate choked and unchoked converging-nozzle paths selected by the critical pressure ratio.
+- Added nozzle exit density and area calculations.
+- Added pressure thrust to the momentum-thrust calculation.
+- Validated representative unchoked cases for zero pressure thrust and the expected thrust reduction with lower inlet recovery.
+
 ### Version 1.1 Changes
 
-- Added non-ideal compressor, combustor, turbine, and choked-nozzle calculation models.
-- Added burner pressure-ratio support and fuel-flow propagation through the engine.
-- Added turbine work correction for the fuel-added mass flow.
-- Added TSFC, thermal efficiency, propulsive efficiency, and overall efficiency outputs.
-- Added a choked-flow pressure-ratio check and a choked converging-nozzle calculation.
+- Added compressor, combustor, turbine, and nozzle efficiency parameters.
+- Added burner pressure-ratio support and fuel-flow propagation.
+- Added turbine work correction for fuel-added mass flow.
+- Added TSFC, thermal, propulsive, and overall efficiency outputs.
+- Added choking logic and converging-nozzle calculations.
 
-## Next Milestone
+## Future Work
 
-Improve model completeness and fidelity by implementing:
+### High Priority
 
-- A working unchoked nozzle model and complete automatic choking behavior
-- Inlet pressure recovery/loss
-- A multi-layer ISA atmosphere
-- Pressure thrust in the engine thrust calculation
-- Engine configuration files for selecting operating parameters
+- JSON engine configuration files
+- Multiple predefined engine presets
+- Validation against real turbojet data
+
+### Medium Priority
+
+- Improved nozzle-loss model
+- Nozzle pressure-recovery option
+- Multi-layer ISA atmosphere
+
+### Long-Term
+
+- Turbofan support
+- Afterburner support
+- Compressor and turbine maps
+- Geometry-based flowpath sizing
+- Multi-spool engine architectures
