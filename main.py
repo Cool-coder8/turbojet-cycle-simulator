@@ -101,7 +101,7 @@ if mode == 1:
 
     area = float(input("Enter inlet area (m^2): "))  # asummed None up until now, but will be user input now ig
     mach = float(input("Enter Mach number: "))  # asummed 0.8 up until now, but will be user input later
-    altitude = int(input("Enter altitude (m): from 0-11000): "))
+    altitude = int(input("Enter altitude (m): from 0-11000): ")) #at some point have this be in the function TODO
     T, P, rho = isa_atmosphere(altitude)
     run_engine(inlet, compressor, combustor, turbine, nozzle, area, mach, T, P, rho, display=True)
 

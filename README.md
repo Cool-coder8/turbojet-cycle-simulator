@@ -1,6 +1,6 @@
 # Turbojet Simulator
 
-A station-based Python model of a turbojet engine cycle. It loads engine parameters from a JSON file, accepts altitude, flight Mach number, and inlet area, calculates flow through the engine, and reports thrust and cycle performance.
+A station-based Python model of a turbojet engine cycle. It can run with user-entered engine parameters, a selected JSON engine preset, or compare all available presets. The simulator calculates flow through the engine and reports thrust and cycle performance.
 
 The atmosphere uses a single tropospheric lapse-rate layer intended for 0–11,000 m; it is not a complete multi-layer ISA model.
 
@@ -12,7 +12,13 @@ From this directory, run:
 python main.py
 ```
 
-The project uses only the Python standard library. At startup, select an engine whose JSON configuration exists in the `engines/` directory:
+The project uses only the Python standard library. At startup, choose a run mode:
+
+- **Custom engine values** — enter component efficiencies, pressure ratios, combustor target temperature, inlet area, flight Mach number, and altitude.
+- **Select a preset engine** — choose one of the JSON configurations in `engines/`, then enter altitude and flight Mach number. The preset supplies engine parameters and inlet area.
+- **Compare all engines** — enter altitude and flight Mach number to run every available preset and compare performance in a table.
+
+The available JSON presets are:
 
 - Generic Turbojet (`generic`)
 - Pratt & Whitney J52 (`j52`)
@@ -22,18 +28,12 @@ The project uses only the Python standard library. At startup, select an engine 
 - Rolls-Royce/Snecma Olympus 593 (`olympus593`)
 - Bristol Siddeley Orpheus (`orpheus`)
 
-The program then prompts for:
-
-- Altitude (m), intended range 0–11,000 m
-- Flight Mach number
-- Inlet area (m²)
-
-Engine pressure ratios, design turbine-inlet temperature, and component efficiencies are loaded from the selected JSON file.
+Altitude is intended to be within 0–11,000 m. In preset and comparison modes, engine pressure ratios, design turbine-inlet temperature, component efficiencies, and inlet area are loaded from each selected JSON file.
 
 ## Engine flow
 
 ```text
-Select Engine -> Load JSON configuration -> Station 0 -> Inlet -> Station 2
+Choose Run Mode -> Custom Values or Load JSON Configuration(s) -> Station 0 -> Inlet -> Station 2
               -> Compressor -> Station 3 -> Combustor -> Station 4
               -> Turbine -> Station 5 -> Choked/unchoked Nozzle -> Station 8
               -> Geometry calculations -> Engine performance
@@ -75,12 +75,14 @@ Select Engine -> Load JSON configuration -> Station 0 -> Inlet -> Station 2
 ### Engine Configuration
 
 - JSON-driven engine parameter loading from `engines/`
-- Runtime engine selection without editing `main.py`
+- Runtime selection of a single preset without editing `main.py`
+- Custom engine-parameter entry at runtime
+- Comparison of all seven presets at the same altitude and Mach number
 - Presets for Generic Turbojet, J52, J57, J58, J79, Olympus 593, and Orpheus
 
 ## Current Status
 
-The program displays Stations 0, 2, 3, 4, 5, and 8, compressor work, momentum thrust, pressure thrust, total thrust, TSFC, and efficiency results. Outputs depend on the selected engine configuration and entered flight conditions.
+In custom and single-preset modes, the program displays Stations 0, 2, 3, 4, 5, and 8, compressor work, momentum thrust, pressure thrust, total thrust, TSFC, and efficiency results. Comparison mode runs all seven presets at the same flight conditions and prints thrust, TSFC, thermal efficiency, propulsive efficiency, and overall efficiency for each; it suppresses the station-by-station output.
 
 Important model limitations:
 
@@ -99,6 +101,8 @@ The detailed station-by-station model and recent progress are in [engine_design.
 
 - Added JSON engine configurations and runtime engine selection.
 - Added presets for the Generic Turbojet, J52, J57, J58, J79, Olympus 593, and Orpheus.
+- Added a custom-input mode for engine parameters.
+- Added a comparison mode that evaluates all seven presets at shared altitude and Mach inputs and prints a performance table.
 - Added inlet total-pressure recovery while conserving total temperature.
 - Added nozzle exit density and continuity-based exit area calculations.
 - Added momentum and pressure thrust reporting.
@@ -111,9 +115,13 @@ The detailed station-by-station model and recent progress are in [engine_design.
 
 #### Current Simulator Capability
 
-Atmosphere → Freestream → Inlet → Compressor → Combustor → Turbine → Nozzle → Geometry Calculations → Momentum Thrust → Pressure Thrust → TSFC → Thermal Efficiency → Propulsive Efficiency → Overall Efficiency
+Atmosphere → Freestream → Inlet → Compressor → Combustor → Turbine → Nozzle → Geometry Calculations → Momentum Thrust → Pressure Thrust → TSFC → Thermal Efficiency → Propulsive Efficiency → Overall Efficiency → Preset Comparison
 
 The simulator now supports configurable engine presets and non-ideal component parameter values. It remains a simplified cycle model rather than a validated, geometry-resolved engine performance tool.
+
+## Next Milestone
+
+Improve engine comparison by validating preset data and documenting the basis for each engine configuration.
 
 ## Future Work
 

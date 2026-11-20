@@ -1,6 +1,6 @@
 # Turbojet Simulator Equation Reference
 
-This document describes equations currently used by the simulator and identifies modeling assumptions and unfinished features. Engine design parameters are loaded at runtime from a selected JSON file in `engines/`.
+This document describes equations currently used by the simulator and identifies modeling assumptions and unfinished features. Engine parameters can be entered interactively or loaded from JSON files in `engines/`; comparison mode applies each preset to the same flight conditions.
 
 Calculations use SI units and ideal-gas properties, with the following defaults on each `Station`:
 
@@ -37,7 +37,7 @@ The implementation rounds \(T\) and \(P\) to two decimal places and \(\rho\) to 
 
 ## Engine Configuration
 
-At startup, `main.py` loads the selected `engines/<name>.json` file. The presets currently available are:
+In preset mode, `main.py` loads the selected `engines/<name>.json` file; comparison mode loads each preset in turn. The presets currently available are:
 
 - Generic Turbojet
 - Pratt & Whitney J52, J57, and J58
@@ -45,7 +45,7 @@ At startup, `main.py` loads the selected `engines/<name>.json` file. The presets
 - Rolls-Royce/Snecma Olympus 593
 - Bristol Siddeley Orpheus
 
-The JSON parameters include compressor pressure ratio and efficiency, combustor exit total temperature, combustor efficiency and pressure ratio, turbine efficiency, nozzle efficiency, and inlet efficiency. These values are selected per engine rather than set as component parameters directly in `main.py`.
+The JSON parameters include compressor pressure ratio and efficiency, combustor exit total temperature, combustor efficiency and pressure ratio, turbine efficiency, nozzle efficiency, inlet efficiency, and inlet area. The program supports three workflows: entering these component parameters interactively, loading one JSON preset, or running all presets at the same altitude and Mach number for comparison. Preset comparison reports thrust, TSFC, thermal efficiency, propulsive efficiency, and overall efficiency for each engine.
 
 ## Freestream / Station 0
 
@@ -349,6 +349,7 @@ These are simplified ideal-jet performance relations; pressure thrust is include
 
 - Added JSON engine configuration loading and runtime engine selection.
 - Added Generic Turbojet, J52, J57, J58, J79, Olympus 593, and Orpheus presets.
+- Added custom engine-input and all-preset comparison modes alongside single-preset selection.
 - Added inlet pressure recovery, \(P_{t2}=\eta_{\text{inlet}}P_{t0}\), with \(T_{t2}=T_{t0}\).
 - Added nozzle exit density and continuity-based exit area for pressure-thrust calculations.
 - Added momentum and pressure thrust reporting.

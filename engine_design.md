@@ -30,7 +30,13 @@ Station 8
 Engine performance
 ```
 
-At startup, `main.py` selects and loads an engine JSON configuration from `engines/`. It then prompts for altitude, flight Mach number, and inlet area, calculates Station 0, and calls each component in sequence. Compressor ratio, design \(T_{t4}\), component efficiencies, and combustor pressure ratio come from the selected preset rather than being hardcoded in `main.py`.
+At startup, `main.py` offers three run modes:
+
+1. **Custom values:** prompts for inlet, compressor, combustor, turbine, and nozzle parameters, as well as inlet area, Mach number, and altitude.
+2. **Single preset:** loads one JSON configuration from `engines/`, then prompts for altitude and Mach number. The preset supplies the inlet area and component parameters.
+3. **Compare presets:** loads each available engine JSON file in turn, runs the same altitude and Mach inputs, and prints a table of performance results.
+
+For preset runs, compressor ratio, design \(T_{t4}\), component efficiencies, combustor pressure ratio, and inlet area come from the JSON configuration.
 
 ## Engine Configuration
 
@@ -46,7 +52,7 @@ The current engine database contains:
 | `olympus593` | Rolls-Royce/Snecma Olympus 593 |
 | `orpheus` | Bristol Siddeley Orpheus |
 
-Each JSON file supplies the engine name, compressor pressure ratio and efficiency, combustor exit total temperature, combustor efficiency and pressure ratio, turbine efficiency, nozzle efficiency, and inlet efficiency. The engine data is intended for comparison; validation against published engine performance is still future work.
+Each JSON file supplies the engine name, compressor pressure ratio and efficiency, combustor exit total temperature, combustor efficiency and pressure ratio, turbine efficiency, nozzle efficiency, inlet efficiency, and inlet area. The comparison mode evaluates all seven configurations at common flight conditions. The engine data is intended for comparison; validation against published engine performance is still future work.
 
 ## Stations and components
 
@@ -307,7 +313,7 @@ These are simplified ideal-jet performance relations; pressure thrust is include
 - Single-layer tropospheric atmosphere intended for 0–11,000 m; input is not range-validated
 - Inlet total-pressure recovery is modeled as \(P_{t2}=\eta_{\text{inlet}}P_{t0}\), with \(T_{t2}=T_{t0}\)
 - Configurable compressor, combustor, turbine, and choked-nozzle efficiency models
-- Component efficiencies and burner pressure ratio are loaded from the selected engine preset
+- Component efficiencies and burner pressure ratio are entered interactively in custom mode or loaded from the selected engine preset
 - Fuel mass is included in turbine flow and Station 8 mass flow
 - Both choked and unchoked nozzle calculations are implemented; the unchoked method warns rather than automatically changing branches if \(M_e\ge1\)
 - Thrust includes pressure thrust
@@ -326,6 +332,7 @@ Implemented:
 - ✅ Nozzle exit density and area
 - ✅ Momentum and pressure thrust
 - ✅ Thrust, TSFC, thermal efficiency, propulsive efficiency, and overall efficiency
+- ✅ Custom engine input, single-preset runs, and all-preset comparison mode
 
 ## Recent Progress
 
@@ -335,6 +342,7 @@ Implemented:
 
 - Added JSON engine configuration loading from the `engines/` directory and runtime engine selection.
 - Added presets for the Generic Turbojet, Pratt & Whitney J52/J57/J58, General Electric J79, Rolls-Royce/Snecma Olympus 593, and Bristol Siddeley Orpheus.
+- Added three execution modes: custom engine values, a single JSON preset, and a comparison table across all presets.
 - Added non-ideal inlet total-pressure recovery while conserving total temperature.
 - Added nozzle exit density and continuity-based exit area.
 - Added momentum and pressure thrust to reported engine performance.
@@ -349,7 +357,7 @@ The checks cover the tested operating cases; engine preset data and edge cases s
 
 #### Current Simulator Capability
 
-Atmosphere → Freestream → Inlet → Compressor → Combustor → Turbine → Nozzle → Geometry Calculations → Momentum Thrust → Pressure Thrust → TSFC → Thermal Efficiency → Propulsive Efficiency → Overall Efficiency
+Atmosphere → Freestream → Inlet → Compressor → Combustor → Turbine → Nozzle → Geometry Calculations → Momentum Thrust → Pressure Thrust → TSFC → Thermal Efficiency → Propulsive Efficiency → Overall Efficiency → Preset Comparison
 
 ### Nozzle Improvements
 
