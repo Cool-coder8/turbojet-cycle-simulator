@@ -12,7 +12,6 @@ class Compressor:
     def calculate(self, station2):
 
         station3 = Station(3)
-        station3.mdot = station2.mdot
         Tt3s = (station2.Tt) * (self.pressure_ratio ** ((station3.gamma - 1) / station3.gamma))
         Tt3 = station2.Tt + (Tt3s - station2.Tt) / self.efficiency
         station3.Tt = round(Tt3, 2)

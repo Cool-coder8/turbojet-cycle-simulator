@@ -19,6 +19,8 @@ Combustor
     ↓
 Station 4
     ↓
+Turbine-throat airflow calculation
+    ↓
 Turbine
     ↓
 Station 5
@@ -32,11 +34,11 @@ Engine performance
 
 At startup, `main.py` offers three run modes:
 
-1. **Custom values:** prompts for inlet, compressor, combustor, turbine, and nozzle parameters, as well as inlet area, Mach number, and altitude.
+1. **Custom values:** prompts for inlet, compressor, combustor, turbine, and nozzle parameters, as well as inlet area, turbine throat area, Mach number, and altitude.
 2. **Single preset:** loads one JSON configuration from `engines/`, then prompts for altitude and Mach number. The preset supplies the inlet area and component parameters.
 3. **Compare presets:** loads each available engine JSON file in turn, runs the same altitude and Mach inputs, and prints a table of performance results.
 
-For preset runs, compressor ratio, design \(T_{t4}\), component efficiencies, combustor pressure ratio, and inlet area come from the JSON configuration.
+For preset runs, compressor ratio, design \(T_{t4}\), component efficiencies, combustor pressure ratio, inlet area, turbine throat area, and published airflow reference come from the JSON configuration. Turbine throat area sets modeled airflow; inlet area is retained as a geometric reference.
 
 ## Engine Configuration
 
@@ -52,7 +54,7 @@ The current engine database contains:
 | `olympus593` | Rolls-Royce/Snecma Olympus 593 |
 | `orpheus` | Bristol Siddeley Orpheus |
 
-Each JSON file supplies the engine name, compressor pressure ratio and efficiency, combustor exit total temperature, combustor efficiency and pressure ratio, turbine efficiency, nozzle efficiency, inlet efficiency, and inlet area. The comparison mode evaluates all seven configurations at common flight conditions. The engine data is intended for comparison; validation against published engine performance is still future work.
+Each JSON file supplies the engine name, compressor pressure ratio and efficiency, combustor exit total temperature, combustor efficiency and pressure ratio, turbine efficiency, nozzle efficiency, inlet efficiency, inlet area, turbine throat area, published mass-flow reference, and (where supplied) notes. The comparison mode evaluates all seven configurations at common flight conditions. Airflow is compared with published references; thrust and other performance metrics still require validation at matched operating points.
 
 ## Stations and components
 
@@ -71,19 +73,28 @@ Known properties:
 - Density \(\rho\)
 - Speed of sound \(a\)
 - Air velocity \(V_a\)
-- Air mass flow rate \(\dot{m}_a\)
+- Air mass flow rate \(\dot{m}_a\), assigned from the turbine-throat calculation
 - Total temperature \(T_{t0}\)
 - Total pressure \(P_{t0}\)
 
-The atmosphere uses a single tropospheric lapse-rate layer intended for 0–11,000 m, rather than a complete multi-layer ISA model. Freestream speed of sound, velocity, and total properties use ideal-gas relations. Mass flow rate is:
+The atmosphere uses a single tropospheric lapse-rate layer intended for 0–11,000 m, rather than a complete multi-layer ISA model. Freestream speed of sound, velocity, and total properties use ideal-gas relations. Inlet area remains an input/reference parameter, but the original \(\rho A V\) estimate no longer determines airflow. The model instead sets airflow from the turbine throat after calculating Station 4:
 
 \[
-\dot{m}_a = \rho A V_a
+\dot{m}_4 =
+\frac{P_{t4}A_4}{\sqrt{T_{t4}}}
+\times\sqrt{\frac{\gamma}{R}}
+\times\left(\frac{\gamma+1}{2}\right)^{-\frac{\gamma+1}{2(\gamma-1)}}
 \]
+
+\[
+\dot{m}_a = \frac{\dot{m}_4}{1+f}
+\]
+
+This assumes ideal-gas choked flow at a turbine nozzle-guide-vane throat. The code does not test the choking condition separately. The resulting air flow is assigned to Stations 0, 2, and 3; exhaust flow including fuel is assigned to Station 4 and propagated downstream. Consequently, modeled mass flow can remain finite at Mach 0.
 
 ### Inlet — Station 0 → Station 2
 
-`Inlet.calculate` copies total temperature and mass flow from Station 0 and applies the configured inlet efficiency to total pressure:
+`Inlet.calculate` copies total temperature and throat-derived mass flow from Station 0 and applies the configured inlet efficiency to total pressure:
 
 \[
 T_{t2} = T_{t0}, \qquad P_{t2} = \eta_{\text{inlet}}P_{t0}, \qquad \dot{m}_2 = \dot{m}_0
@@ -230,14 +241,14 @@ T_8 = T_{t5} - \eta_n(T_{t5}-T_{t8s})
 \]
 
 \[
-P_8 = P_{t5}\left(\frac{T_8}{T_{t5}}\right)^{\gamma/(\gamma-1)}
+P_8 = \frac{P_{t5}}{1.893}
 \]
 
 \[
 V_8 = \sqrt{2c_p(T_{t5}-T_8)}
 \]
 
-For unchoked flow, the code sets \(P_8=P_{\text{ambient}}\), then calculates the isentropic temperature corresponding to that pressure:
+The code uses a fixed critical pressure ratio of 1.893 for air with \(\gamma=1.4\). Nozzle efficiency affects exit temperature and velocity, while the choked exit pressure is set independently using this ratio. For unchoked flow, the code sets \(P_8=P_{\text{ambient}}\), then calculates the isentropic temperature corresponding to that pressure:
 
 \[
 T_{t8s}=T_{t5}\left(\frac{P_8}{P_{t5}}\right)^{(\gamma-1)/\gamma}
@@ -284,24 +295,30 @@ Station 8 mass flow includes fuel; Station 0 mass flow is air only. The pressure
 
 The reported units are kg/(N·hr).
 
+### Effective jet velocity
+
+\[
+V_{\text{eff}} = V_8 + \frac{(P_8-P_a)A_8}{\dot{m}_8}
+\]
+
 ### Thermal efficiency
 
 \[
 \eta_{th} =
-\frac{\left((1+f)V_8^2 - V_a^2\right)/2}{fQ_R}
+\frac{\left((1+f)V_{\text{eff}}^2 - V_a^2\right)/2}{fQ_R}
 \]
 
 ### Propulsive and overall efficiency
 
 \[
-\eta_p = \frac{2V_a}{V_8+V_a}
+\eta_p = \frac{2V_a}{V_{\text{eff}}+V_a}
 \]
 
 \[
 \eta_o = \eta_{th}\eta_p
 \]
 
-These are simplified ideal-jet performance relations; pressure thrust is included in thrust but not in these efficiency formulas.
+The effective jet velocity folds pressure thrust into the velocity used by both efficiency calculations. These remain simplified performance relations.
 
 ## Station data
 
@@ -312,6 +329,8 @@ These are simplified ideal-jet performance relations; pressure thrust is include
 - Ideal gas with constant \(\gamma\), \(c_p\), and \(R\)
 - Single-layer tropospheric atmosphere intended for 0–11,000 m; input is not range-validated
 - Inlet total-pressure recovery is modeled as \(P_{t2}=\eta_{\text{inlet}}P_{t0}\), with \(T_{t2}=T_{t0}\)
+- Mass flow assumes ideal-gas choking at the turbine throat; the code does not independently verify that the throat is choked
+- Inlet area is retained for reference but does not set mass flow
 - Configurable compressor, combustor, turbine, and choked-nozzle efficiency models
 - Component efficiencies and burner pressure ratio are entered interactively in custom mode or loaded from the selected engine preset
 - Fuel mass is included in turbine flow and Station 8 mass flow
@@ -324,6 +343,7 @@ Implemented:
 
 - ✅ Tropospheric atmosphere and freestream state
 - ✅ Mass-flow propagation and fuel addition
+- ✅ Choked turbine-throat airflow metering
 - ✅ Inlet pressure recovery
 - ✅ Compressor efficiency model
 - ✅ Combustor efficiency and burner pressure-ratio model
@@ -332,7 +352,7 @@ Implemented:
 - ✅ Nozzle exit density and area
 - ✅ Momentum and pressure thrust
 - ✅ Thrust, TSFC, thermal efficiency, propulsive efficiency, and overall efficiency
-- ✅ Custom engine input, single-preset runs, and all-preset comparison mode
+- ✅ Custom engine input, single-preset runs, and all-preset comparison mode with modeled/published airflow reporting
 
 ## Recent Progress
 
@@ -347,17 +367,42 @@ Implemented:
 - Added nozzle exit density and continuity-based exit area.
 - Added momentum and pressure thrust to reported engine performance.
 
-#### Validation Completed
+### Version 1.3 Progress Update
 
-- Choked nozzle cases were checked for \(P_e>P_{\text{ambient}}\) and positive pressure thrust.
-- Unchoked cases were checked for \(P_e=P_{\text{ambient}}\), zero pressure thrust, and \(M_e<1\).
-- Reduced inlet efficiency was checked to reduce \(P_{t2}\), \(P_{t5}\), and thrust.
+#### Architecture and Model Changes
 
-The checks cover the tested operating cases; engine preset data and edge cases still need broader validation.
+- Replaced the freestream-based \(\rho A V\) mass-flow estimate with choked turbine-throat metering.
+- Added turbine throat area and published airflow references to the engine configurations.
+- Corrected choked nozzle exit pressure to \(P_8=P_{t5}/1.893\), separating it from the efficiency-adjusted temperature.
+- Added effective jet velocity to include pressure thrust in the thermal and propulsive efficiency calculations.
+
+#### Sea-Level Static Airflow Validation
+
+At 0 m altitude and Mach 0, the supplied model/published airflow comparisons are:
+
+| Engine | Model airflow (kg/s) | Published airflow (kg/s) |
+|---|---:|---:|
+| J52 | 64.86 | 64.86 |
+| J57 | 74.39 | 78.19 |
+| J58 | 136.08 | 138.00 |
+| J79 | 77.10 | 77.11 |
+| Olympus 593 | 185.96 | 185.97 |
+| Orpheus 803 | 38.10 | 38.10 |
+
+These are airflow comparisons only; thrust, TSFC, and efficiency still require validation at matched published operating conditions.
+
+#### Current Validation Focus
+
+- Validate thrust against published values for all engines.
+- Investigate remaining Orpheus 803 and J58 thrust discrepancies.
+- Verify turbine work and nozzle expansion assumptions.
+- Add compressor/turbine power calculations, fuel-flow reporting, and expanded performance output.
 
 #### Current Simulator Capability
 
-Atmosphere → Freestream → Inlet → Compressor → Combustor → Turbine → Nozzle → Geometry Calculations → Momentum Thrust → Pressure Thrust → TSFC → Thermal Efficiency → Propulsive Efficiency → Overall Efficiency → Preset Comparison
+Atmosphere → Freestream → Inlet → Compressor → Combustor → Turbine-Throat Airflow → Turbine → Nozzle → Geometry Calculations → Momentum Thrust → Pressure Thrust → TSFC → Thermal Efficiency → Propulsive Efficiency → Overall Efficiency → Preset Comparison
+
+Current project phase: validation and calibration rather than new feature implementation.
 
 ### Nozzle Improvements
 
@@ -374,7 +419,7 @@ When:
 the nozzle is treated as choked:
 
 - Exit Mach number is set to 1
-- Exit pressure is determined from the choked nozzle temperature/pressure relations
+- Exit pressure is set to \(P_8=P_{t5}/1.893\)
 - Exit velocity is calculated from the energy equation
 - Pressure thrust is included in total thrust
 
@@ -429,20 +474,18 @@ This models stagnation-pressure loss while maintaining total temperature.
 
 ### High Priority
 
-- Populate the engine database with validated engine data
-- Add default inlet areas to engine JSON files
-- Improve engine comparison functionality
+- Validate thrust against published values for all engines
+- Investigate remaining Orpheus 803 and J58 thrust discrepancies
+- Verify turbine work and nozzle expansion assumptions
 
 ### Medium Priority
 
-- Improved nozzle-loss model
-- Multi-layer ISA atmosphere
-- Better handling of edge-case nozzle expansions
+- Add compressor and turbine power calculations
+- Report fuel flow and expand performance reporting
 
 ### Long-Term
 
-- Turbofan support
-- Afterburner support
 - Compressor and turbine maps
-- Geometry-based flowpath sizing
+- Corrected mass flow and variable geometry effects
 - Off-design performance analysis
+- Turbofan architecture and afterburner support

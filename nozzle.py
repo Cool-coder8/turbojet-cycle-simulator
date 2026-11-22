@@ -17,8 +17,9 @@ class Nozzle:
         T8s = round((station5.Tt)*(2/(station5.gamma+1)), 3)
         T8 = station5.Tt - ((station5.Tt - T8s)*self.efficiency)
         station8.T = T8
-        P8 = station5.Pt * (T8 / station5.Tt) ** (station5.gamma / (station5.gamma - 1))
+        P8 = station5.Pt / 1.893 # new updated Pressure because efficiency should really only affect T and V 
         station8.P = P8
+        # maybe later i'll implement nozzle pressure ratio or veloc coefficient
         v8 = round(math.sqrt((2*station5.cp*(station5.Tt-station8.T))), 3)
         station8.airvelocity = round(v8, 3)
         station8.f = station5.f

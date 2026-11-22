@@ -1,4 +1,5 @@
 from station import Station
+import math
 
 
 class Combustor:
@@ -18,7 +19,6 @@ class Combustor:
         Pt4 = station3.Pt*self.bpressure_ratio
         station4.Pt = Pt4
         station4.f = round((station4.cp * (station4.Tt - station3.Tt)) / ((self.efficiency * self.QR) - (station4.cp * station4.Tt)), 8)
-        station4.mdot = station3.mdot * (1 + station4.f)
         
 
         # calculations go here later

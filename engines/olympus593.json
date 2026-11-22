@@ -16,5 +16,9 @@
 
     "inlet_area": 1.1537,
 
+    "turbine_throat_area": 0.12017,
+
+    "published_mdot": 185.97,
+
     "notes": "Verified static OPR (15.5:1; drops to ~11.3 at Mach 2 cruise). Cruise TT4 is 1355 K (1,980 F); peak takeoff TT4 reaches 1723 K (1,450 C) with air-cooled turbine blades."
 }

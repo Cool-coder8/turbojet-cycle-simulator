@@ -14,5 +14,9 @@
 
     "inlet_efficiency": 1.0,
 
-    "inlet_area": 1.0
+    "inlet_area": 1.0,
+
+    "turbine_throat_area": 0.060,
+
+    "published_mdot": 70.00
 }
