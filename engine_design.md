@@ -35,8 +35,8 @@ Engine performance
 At startup, `main.py` offers three run modes:
 
 1. **Custom values:** prompts for inlet, compressor, combustor, turbine, and nozzle parameters, as well as inlet area, turbine throat area, Mach number, and altitude.
-2. **Single preset:** loads one JSON configuration from `engines/`, then prompts for altitude and Mach number. The preset supplies the inlet area and component parameters.
-3. **Compare presets:** loads each available engine JSON file in turn, runs the same altitude and Mach inputs, and prints a table of performance results.
+2. **Single preset:** loads one JSON configuration from `engines/`, then prompts for altitude and Mach number. The preset supplies inlet and turbine throat areas and component parameters.
+3. **Compare presets:** intended to load each engine JSON file in turn, run the same altitude and Mach inputs, and print a table of performance results. The current list has a malformed combined `orpheus, gej47` entry, so the loop does not complete and omits the J47. Separately, the Generic preset lacks `published_thrust_n` and `notes`, fields required by the single-preset information display.
 
 For preset runs, compressor ratio, design \(T_{t4}\), component efficiencies, combustor pressure ratio, inlet area, turbine throat area, and published airflow reference come from the JSON configuration. Turbine throat area sets modeled airflow; inlet area is retained as a geometric reference.
 
@@ -53,8 +53,9 @@ The current engine database contains:
 | `j79` | General Electric J79 |
 | `olympus593` | Rolls-Royce/Snecma Olympus 593 |
 | `orpheus` | Bristol Siddeley Orpheus |
+| `gej47` | General Electric J47 GE-25/-27 |
 
-Each JSON file supplies the engine name, compressor pressure ratio and efficiency, combustor exit total temperature, combustor efficiency and pressure ratio, turbine efficiency, nozzle efficiency, inlet efficiency, inlet area, turbine throat area, published mass-flow reference, and (where supplied) notes. The comparison mode evaluates all seven configurations at common flight conditions. Airflow is compared with published references; thrust and other performance metrics still require validation at matched operating points.
+Each JSON file supplies the engine name, compressor pressure ratio and efficiency, combustor exit total temperature, combustor efficiency and pressure ratio, turbine efficiency, nozzle efficiency, inlet efficiency, inlet area, turbine throat area, published mass-flow reference, and (where supplied) published thrust and notes. Airflow is compared with published references; thrust and other performance metrics still require validation at matched operating points.
 
 ## Stations and components
 
@@ -77,7 +78,7 @@ Known properties:
 - Total temperature \(T_{t0}\)
 - Total pressure \(P_{t0}\)
 
-The atmosphere uses a single tropospheric lapse-rate layer intended for 0–11,000 m, rather than a complete multi-layer ISA model. Freestream speed of sound, velocity, and total properties use ideal-gas relations. Inlet area remains an input/reference parameter, but the original \(\rho A V\) estimate no longer determines airflow. The model instead sets airflow from the turbine throat after calculating Station 4:
+The atmosphere uses ISA tropospheric relations from 0 to 11,000 m and an isothermal layer from 11,000 to 20,000 m. Freestream speed of sound, velocity, and total properties use ideal-gas relations. Inlet area remains an input/reference parameter, but the original \(\rho A V\) estimate no longer determines airflow. The model instead sets airflow from the turbine throat after calculating Station 4:
 
 \[
 \dot{m}_4 =
@@ -220,6 +221,24 @@ Known properties:
 - Fuel-air ratio \(f\)
 - Air-plus-fuel mass flow rate
 
+### Core power and fuel flow
+
+The program reports compressor and turbine power for detailed runs and calculates fuel flow:
+
+\[
+\dot{W}_c=\dot{m}_a w_c
+\]
+
+\[
+\dot{W}_t=\dot{m}_4c_p(T_{t4}-T_{t5})
+\]
+
+\[
+\dot{m}_f=f\dot{m}_a
+\]
+
+Power is printed in MW, and fuel flow in kg/s. Since the turbine exit temperature is calculated directly from compressor work and fuel-added mass, the power balance is algebraically imposed by this model. Matching values check calculation consistency but do not independently validate real-engine shaft power.
+
 ### Nozzle — Station 5 → Station 8
 
 The main program compares \(P_{t5}/P_{\text{ambient}}\) with the critical pressure ratio:
@@ -327,7 +346,7 @@ The effective jet velocity folds pressure thrust into the velocity used by both 
 ## Current assumptions and scope
 
 - Ideal gas with constant \(\gamma\), \(c_p\), and \(R\)
-- Single-layer tropospheric atmosphere intended for 0–11,000 m; input is not range-validated
+- ISA atmosphere layers from 0–20,000 m; unsupported altitudes are not handled with a clear input-validation error
 - Inlet total-pressure recovery is modeled as \(P_{t2}=\eta_{\text{inlet}}P_{t0}\), with \(T_{t2}=T_{t0}\)
 - Mass flow assumes ideal-gas choking at the turbine throat; the code does not independently verify that the throat is choked
 - Inlet area is retained for reference but does not set mass flow
@@ -342,6 +361,7 @@ The effective jet velocity folds pressure thrust into the velocity used by both 
 Implemented:
 
 - ✅ Tropospheric atmosphere and freestream state
+- ✅ ISA isothermal atmosphere layer through 20,000 m
 - ✅ Mass-flow propagation and fuel addition
 - ✅ Choked turbine-throat airflow metering
 - ✅ Inlet pressure recovery
@@ -352,7 +372,8 @@ Implemented:
 - ✅ Nozzle exit density and area
 - ✅ Momentum and pressure thrust
 - ✅ Thrust, TSFC, thermal efficiency, propulsive efficiency, and overall efficiency
-- ✅ Custom engine input, single-preset runs, and all-preset comparison mode with modeled/published airflow reporting
+- ✅ Compressor power, turbine power, and fuel-flow reporting
+- ✅ Custom engine input, single-preset runs, and preset comparison output (with current integration defects noted below)
 
 ## Recent Progress
 
@@ -391,18 +412,52 @@ At 0 m altitude and Mach 0, the supplied model/published airflow comparisons are
 
 These are airflow comparisons only; thrust, TSFC, and efficiency still require validation at matched published operating conditions.
 
-#### Current Validation Focus
-
-- Validate thrust against published values for all engines.
-- Investigate remaining Orpheus 803 and J58 thrust discrepancies.
-- Verify turbine work and nozzle expansion assumptions.
-- Add compressor/turbine power calculations, fuel-flow reporting, and expanded performance output.
-
 #### Current Simulator Capability
 
-Atmosphere → Freestream → Inlet → Compressor → Combustor → Turbine-Throat Airflow → Turbine → Nozzle → Geometry Calculations → Momentum Thrust → Pressure Thrust → TSFC → Thermal Efficiency → Propulsive Efficiency → Overall Efficiency → Preset Comparison
+Atmosphere → Freestream → Inlet → Compressor → Combustor → Turbine-Throat Airflow → Turbine → Nozzle → Geometry Calculations → Momentum Thrust → Pressure Thrust → TSFC → Thermal Efficiency → Propulsive Efficiency → Overall Efficiency → Power/Fuel-Flow Reporting → Preset Comparison (incomplete)
 
 Current project phase: validation and calibration rather than new feature implementation.
+
+### Latest Architecture and Validation Update
+
+#### ISA Layer Expansion
+
+The atmosphere module now supports 0–20,000 m: a lapse-rate troposphere to 11,000 m followed by an isothermal layer at 216.65 K to 20,000 m. Higher layers and clear handling of out-of-range altitude inputs remain unimplemented.
+
+#### Power and Fuel-Flow Outputs
+
+Detailed runs now report compressor power, turbine power, and fuel flow. The supplied J52 example reports 25.713 MW for both compressor and turbine power. Because turbine exit temperature is determined directly from compressor work, this equality is a built-in model consistency check rather than independent validation of physical power balance.
+
+#### Sea-Level Static Airflow Comparisons
+
+At 0 m altitude and Mach 0, the supplied model/reference airflow results are:
+
+| Engine | Model airflow (kg/s) | Reference airflow (kg/s) |
+|---|---:|---:|
+| J52 | 64.86 | 64.86 |
+| J57 | 74.39 | 78.19 |
+| J58 | 136.08 | 138.00 |
+| J79 | 77.10 | 77.11 |
+| Olympus 593 | 185.96 | 185.97 |
+| Orpheus 803 | 38.10 | 38.10 |
+
+These are airflow comparisons only; they do not validate thrust, TSFC, or efficiencies.
+
+#### Independent Static Thrust Check
+
+The supplied GE J47 GE-25/-27 result is 26,253 N versus a reference value of 26,556 N, an indicated error of -1.14%. The reported model/reference airflow is 46.27 kg/s for both. This is a useful independent single-point check, but does not establish accuracy over other engines or flight conditions.
+
+#### Known Preset Integration Limitation
+
+The preset selection prompt lists `gej47`, and a J47 JSON file exists. However, the comparison-mode list contains `"orpheus, gej47"` as one string rather than two engine identifiers. In addition, the Generic preset lacks `published_thrust_n` and `notes`, fields accessed by the engine display function. Comparison and Generic-preset display need integration fixes before all presets can be considered operational.
+
+#### Validation Roadmap
+
+- Validate thrust against published data for all engines at matched rating conditions.
+- Investigate Orpheus 803 and J58 thrust discrepancies.
+- Verify turbine work and nozzle expansion assumptions.
+- Verify thrust prediction at altitude and add thrust-error reporting.
+- Expand station areas and flowpath analysis.
 
 ### Nozzle Improvements
 
@@ -474,18 +529,21 @@ This models stagnation-pressure loss while maintaining total temperature.
 
 ### High Priority
 
+- Fix comparison-mode handling of the Generic and J47 presets
 - Validate thrust against published values for all engines
 - Investigate remaining Orpheus 803 and J58 thrust discrepancies
 - Verify turbine work and nozzle expansion assumptions
+- Verify thrust predictions at altitude and report thrust error
 
 ### Medium Priority
 
-- Add compressor and turbine power calculations
-- Report fuel flow and expand performance reporting
+- Expand station-property and station-area calculations
+- Add flowpath analysis mode
 
 ### Long-Term
 
 - Compressor and turbine maps
-- Corrected mass flow and variable geometry effects
+- Corrected mass flow
+- Variable-geometry systems
 - Off-design performance analysis
 - Turbofan architecture and afterburner support

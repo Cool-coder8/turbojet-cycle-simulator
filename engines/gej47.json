@@ -1,0 +1,23 @@
+{
+    "name": "General Electric J47 (GE-25/-27)",
+
+    "compressor_pr": 5.35,
+    "compressor_efficiency": 0.81,
+
+    "combustor_tt4": 1115,
+    "combustor_efficiency": 0.97,
+    "combustor_pressure_ratio": 0.95,
+
+    "turbine_efficiency": 0.85,
+    "turbine_throat_area": 0.07767,
+
+    "nozzle_efficiency": 0.96,
+
+    "inlet_efficiency": 0.97,
+    "inlet_area": 0.6843,
+
+    "published_mdot": 46.27,
+    "published_thrust_n": 26556.0,
+
+    "notes": "Verified OPR (5.35:1), airflow (102 lb/s / 46.27 kg/s), and dry thrust (5,970 lbf / 26,556 N) from J47-GE-25/-27 specs. Late-1940s 12-stage single-spool axial turbojet."
+}

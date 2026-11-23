@@ -1,6 +1,6 @@
 # Turbojet Simulator Equation Reference
 
-This document describes equations currently used by the simulator and identifies modeling assumptions and unfinished features. Engine parameters can be entered interactively or loaded from JSON files in `engines/`; comparison mode applies each preset to the same flight conditions.
+This document describes equations currently used by the simulator and identifies modeling assumptions and unfinished features. Engine parameters can be entered interactively or loaded from JSON files in `engines/`; comparison mode is intended to apply each preset at the same flight conditions, but currently has a malformed list entry.
 
 Calculations use SI units and ideal-gas properties, with the following defaults on each `Station`:
 
@@ -12,7 +12,7 @@ Calculations use SI units and ideal-gas properties, with the following defaults 
 
 ## Atmosphere
 
-`isa_atmosphere(altitude)` in `atmosphere.py` uses a single tropospheric lapse-rate layer:
+`isa_atmosphere(altitude)` in `atmosphere.py` uses a tropospheric lapse-rate layer from 0 to 11,000 m, followed by an isothermal layer from 11,000 to 20,000 m.
 
 \[
 T = T_0 - Lh
@@ -26,26 +26,36 @@ P = P_0\left(\frac{T}{T_0}\right)^{g/(LR)}
 \rho = \frac{P}{RT}
 \]
 
-- \(h\): altitude (m), intended range 0–11,000 m
+For \(11{,}000 < h \le 20{,}000\ \text{m}\), temperature is held at \(T=216.65\ \text{K}\), and pressure and density are:
+
+\[
+P=P_{11}\exp\left(-\frac{g(h-11{,}000)}{RT}\right), \qquad
+\rho=\frac{P}{RT}
+\]
+
+where \(P_{11}=22{,}614.21\ \text{Pa}\).
+
+- \(h\): altitude (m), supported range 0–20,000 m
 - \(T_0 = 288.15\ \text{K}\): sea-level temperature
 - \(P_0 = 101325\ \text{Pa}\): sea-level pressure
 - \(L = 0.0065\ \text{K/m}\): temperature lapse rate
 - \(g = 9.81\ \text{m/s}^2\)
 - \(R = 287\ \text{J/(kg·K)}\)
 
-The implementation rounds \(T\) and \(P\) to two decimal places and \(\rho\) to four. It does not validate the input altitude or implement higher ISA layers.
+The implementation rounds \(T\) and \(P\) to two decimal places and \(\rho\) to four. It does not implement higher ISA layers or return a clear validation error for unsupported altitudes.
 
 ## Engine Configuration
 
-In preset mode, `main.py` loads the selected `engines/<name>.json` file; comparison mode loads each preset in turn. The presets currently available are:
+In preset mode, `main.py` loads the selected `engines/<name>.json` file; comparison mode attempts to load each preset in turn but currently has an invalid combined identifier. The presets currently available are:
 
 - Generic Turbojet
 - Pratt & Whitney J52, J57, and J58
 - General Electric J79
+- General Electric J47 GE-25/-27
 - Rolls-Royce/Snecma Olympus 593
 - Bristol Siddeley Orpheus
 
-The JSON parameters include compressor pressure ratio and efficiency, combustor exit total temperature, combustor efficiency and pressure ratio, turbine efficiency, nozzle efficiency, inlet efficiency, inlet area, turbine throat area, and a published mass-flow reference. The program supports three workflows: entering component parameters interactively, loading one JSON preset, or running all presets at the same altitude and Mach number for comparison. Preset comparison reports performance and modeled airflow against the published mass-flow reference.
+The JSON parameters include compressor pressure ratio and efficiency, combustor exit total temperature, combustor efficiency and pressure ratio, turbine efficiency, nozzle efficiency, inlet efficiency, inlet area, turbine throat area, and published reference data. The program supports three workflows: entering component parameters interactively, loading one JSON preset, or attempting to run all presets at the same altitude and Mach number for comparison. The comparison loop does not complete because of a malformed engine identifier; the Generic preset display also lacks metadata keys required by the single-preset display.
 
 ## Freestream / Station 0
 
@@ -212,6 +222,27 @@ P_{t5}=P_{t4}\left(\frac{T_{t5s}}{T_{t4}}\right)^{\gamma/(\gamma-1)}
 
 For \(\eta_t<1\), the isentropic temperature drop needed to produce the actual work is larger; the pressure relation uses \(T_{t5s}\). The code rounds \(P_{t5}\) to two decimal places and propagates mass flow and \(f\) to Station 5.
 
+### Power and fuel flow
+
+The program reports compressor and turbine powers using:
+
+\[
+\dot{W}_c=\dot{m}_0w_c
+\]
+
+\[
+w_t=c_p(T_{t4}-T_{t5}), \qquad
+\dot{W}_t=\dot{m}_4w_t
+\]
+
+Fuel flow is:
+
+\[
+\dot{m}_f=f\dot{m}_0
+\]
+
+Because \(T_{t5}\) is calculated from \(w_c/[c_p(1+f)]\), this implementation makes \(\dot{W}_t\) algebraically equal to \(\dot{W}_c\), subject to rounding. Matching reported powers are an internal consistency check, not an independent validation of a real engine's shaft power.
+
 ## Nozzle / Station 5 → Station 8
 
 The main program checks the ratio of turbine-exit total pressure to ambient pressure:
@@ -344,18 +375,19 @@ The effective jet velocity folds pressure thrust into the velocity used by both 
 
 ## Future Improvements
 
-- Validate thrust against published values for all engines
+- Validate thrust at matched published conditions and report percentage error
 - Investigate the Orpheus 803 and J58 thrust discrepancies
-- Verify turbine work and nozzle-expansion assumptions
-- Add compressor and turbine power calculations, fuel-flow reporting, and expanded performance output
-- Add compressor and turbine maps, corrected mass flow, variable geometry, and off-design analysis
+- Correct preset comparison integration for the J47 and Generic entries
+- Validate thrust prediction at altitude
+- Calculate additional station areas and support flowpath analysis
+- Add corrected mass flow, compressor and turbine maps, variable geometry, and off-design analysis
 - Improve choking control, nozzle-loss modeling, and input validation
-- Implement multi-layer ISA atmosphere and extend the model to turbofans and afterburners
+- Implement higher ISA layers and extend performance modeling to turbofans and afterburners
 
 ## Simplifying assumptions and limitations
 
 - Ideal gas with constant \(\gamma\), \(c_p\), and \(R\)
-- Single-layer tropospheric atmosphere intended for 0–11,000 m; input is not range-validated
+- ISA atmosphere implemented from 0–20,000 m; input outside the supported layers is not handled with a clear validation error
 - Inlet, compressor, combustor, turbine, and nozzle use simplified efficiency/pressure-ratio models
 - Component parameters vary by selected JSON engine preset
 - Air mass flow is inferred from an assumed choked turbine throat; the implementation does not verify that this throat is choked
@@ -394,3 +426,13 @@ The supplied comparisons at 0 m altitude and Mach 0 are:
 | Orpheus 803 | 38.10 | 38.10 |
 
 These results validate airflow only at the listed static conditions; thrust, TSFC, and efficiency comparisons remain in progress. The current project phase is validation and calibration.
+
+## Current Project Update
+
+- Added the ISA isothermal layer from 11,000 to 20,000 m.
+- Added compressor power, turbine power, and fuel-flow calculations to detailed output.
+- Added the General Electric J47 GE-25/-27 preset with reported reference airflow and thrust.
+- Reported independent static J47 result: model airflow 46.27 kg/s and thrust 26,253 N versus reference values of 46.27 kg/s and 26,556 N (reported thrust error: -1.14%).
+- Reported J52 compressor and turbine power: 25.713 MW each. Because the turbine temperature drop is derived directly from compressor specific work, this agreement is an implementation consistency check rather than independent physical validation.
+- The comparison-mode list currently contains the combined string `orpheus, gej47`, which does not match an engine JSON filename. The Generic preset also lacks `published_thrust_n` and `notes`, fields accessed by current display code; preset integration should be corrected before claiming all-engine comparison.
+- Airflow reference agreement does not by itself validate thrust, TSFC, or efficiencies.

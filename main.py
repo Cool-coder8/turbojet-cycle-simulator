@@ -14,7 +14,11 @@ def print_engine_info(engine):
     print(f"{engine["name"]}\n")
     print(f"OPR: {engine["compressor_pr"]}")
     print(f"TT4: {engine["combustor_tt4"]}K")
+    print(f"Turbine Throat Area: {engine['turbine_throat_area']} m^2")
     print(f"Inlet Area: {engine["inlet_area"]}m^2\n")
+    print("Reference Values (Sea Level Static):")
+    print(f"Published Thrust(Mach 0, Sea Level): {engine['published_thrust_n']} N")
+    print(f"Published Airflow: {engine['published_mdot']} kg/s\n")
     print(f"Notes: \n {engine["notes"]} \n")
 
 def run_engine(inlet, compressor, combustor, turbine, nozzle, area, A4, mach, T, P, rho, display):
@@ -39,6 +43,12 @@ def run_engine(inlet, compressor, combustor, turbine, nozzle, area, A4, mach, T,
     station4.mdot = mdot4
 
     station5 = turbine.calculate(station4, compressor.work)
+    compressor_power = station3.mdot * compressor.work
+    compressor_power_MW = compressor_power / 1e6
+    turbine_work = (station5.cp)*(station4.Tt-station5.Tt)
+    turbine_power = (station5.mdot) * (turbine_work)
+    turbine_power_MW = turbine_power / 1e6
+
 
     pressure_ratio = station5.Pt/station0.P
     critical_ratio = ((station5.gamma + 1)/2)**(station5.gamma/(station5.gamma-1)) # should be about 1.893
@@ -52,6 +62,7 @@ def run_engine(inlet, compressor, combustor, turbine, nozzle, area, A4, mach, T,
     momentum_thrust = (station8.mdot * station8.airvelocity) - (station0.mdot * station0.airvelocity)
 
     #General Engine Performance Calculations
+    fuel_flow = station0.mdot * station4.f
     pressure_thrust = (station8.area*(station8.P - station0.P))
     thrust = momentum_thrust + pressure_thrust
     sfc = (((station8.f * station0.mdot)/thrust) * 3600)  # kg/(N.hr)
@@ -67,10 +78,13 @@ def run_engine(inlet, compressor, combustor, turbine, nozzle, area, A4, mach, T,
         station2.display()
         station3.display()
         print(f"Compressor Work: {compressor.work}")
+        print(f"Compressor Power: {compressor_power/1e6:.3f} MW")
         station4.display()
         station5.display()
+        print(f"Turbine Power: {turbine_power/1e6:.3f} MW")
         station8.display()
         print("\nFinal Important Values:")
+        print(f"Fuel flow: {fuel_flow:.2f}kg/s")
         print(f"Thrust: {thrust:.2f} N")
         print(f"SFC: {sfc:.8f} kg/(N.hr)")
         print(f"Thermal Efficiency: {(nth*100):.4f}%")
@@ -88,7 +102,8 @@ def run_engine(inlet, compressor, combustor, turbine, nozzle, area, A4, mach, T,
         "momentum_thrust": momentum_thrust,
         "pressure_thrust": pressure_thrust,
         "mdot_air": station0.mdot,
-        "mdot_exh": station8.mdot
+        "mdot_exh": station8.mdot,
+        "fuel_flow": fuel_flow
     }
         
 def speed_of_sound(station0):  #calcs  speed of sound at a temp
@@ -135,7 +150,7 @@ if mode == 1:
 
     
 elif mode == 2:
-    engine_name = str(input("Select Engine(generic, j52, j57, j58, j79, olympus593, orpheus): "))
+    engine_name = str(input("Select Engine(generic, j52, j57, j58, j79, olympus593, orpheus, gej47): "))
     
     with open(f"engines/{engine_name}.json") as f:
         engine = json.load(f)
@@ -170,10 +185,10 @@ elif mode == 2:
     run_engine(inlet, compressor, combustor, turbine, nozzle, area, A4, mach, T, P, rho, display=True)
 
 elif mode ==3:
-    engines_list = ["generic", "j52", "j57", "j58", "j79", "olympus593", "orpheus"]
+    engines_list = ["generic", "j52", "j57", "j58", "j79", "olympus593", "orpheus, gej47"]
     altitude = int(input("Enter altitude (m): from 0-11000): "))
     mach = float(input("Enter Mach number: "))  # asummed 0.8 up until now, but will be user input later
-    print(f"{'Engine':40}"f"{'Thrust':>10}"f"{'TSFC':>10}"f"{'ηth':>10}"f"{'ηp':>10}"f"{'ηo':>10}"f"{'Model(ṁ)air':>14}"f"{'Model(ṁ)exh':>14}"f"{'Published(ṁ)':>14}")
+    print(f"{'Engine':38}"f"{'Thrust':>10}"f"{'TSFC':>8}"f"{'ηth':>7}"f"{'ηp':>7}"f"{'ηo':>7}"f"{'(ṁ)air':>10}"f"{'(ṁ)exh':>10}"f"{'SLS(ṁ)':>9}"f"{'(ṁ)fuel':>10}")
 
     T, P, rho = isa_atmosphere(altitude)
     for engine_name in engines_list:
@@ -202,4 +217,4 @@ elif mode ==3:
         area = engine["inlet_area"]
         A4 = engine["turbine_throat_area"]
         results = run_engine(inlet, compressor, combustor, turbine, nozzle, area, A4, mach, T, P, rho, display=False)
-        print(f"{engine['name']:40}"f"{results['thrust']:10.1f}"f"{results['sfc']:10.4f}"f"{results['nth']*100:10.2f}"f"{results['np']*100:10.2f}"f"{results['overall_efficiency']*100:10.2f}"f"{results['mdot_air']:10.2f}"f"{results['mdot_exh']:10.2f}"f"{engine['published_mdot']:10.2f}")
+        print(f"{engine['name']:38}"f"{results['thrust']:10.1f}"f"{results['sfc']:8.4f}"f"{results['nth']*100:7.2f}"f"{results['np']*100:7.2f}"f"{results['overall_efficiency']*100:7.2f}"f"{results['mdot_air']:10.2f}"f"{results['mdot_exh']:10.2f}"f"{engine['published_mdot']:9.2f}"f"{results['fuel_flow']:10.2f}")

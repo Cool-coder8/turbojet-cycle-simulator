@@ -1,8 +1,8 @@
 # Turbojet Simulator
 
-A station-based Python model of a turbojet engine cycle. It can run with user-entered engine parameters, a selected JSON engine preset, or compare all available presets. Airflow is calculated from a choked turbine-throat model rather than freestream velocity, allowing the model to represent static operation.
+A station-based Python model of a turbojet engine cycle. It can run with user-entered engine parameters, a selected JSON engine preset, or compare engine presets. Airflow is calculated from a choked turbine-throat model rather than freestream velocity, allowing the model to represent static operation.
 
-The atmosphere uses a single tropospheric lapse-rate layer intended for 0–11,000 m; it is not a complete multi-layer ISA model.
+The atmosphere uses ISA troposphere and isothermal-layer relations from 0 to 20,000 m. It does not model higher ISA layers.
 
 ## Run
 
@@ -15,8 +15,8 @@ python main.py
 The project uses only the Python standard library. At startup, choose a run mode:
 
 - **Custom engine values** — enter component efficiencies, pressure ratios, combustor target temperature, inlet area, turbine throat area, flight Mach number, and altitude.
-- **Select a preset engine** — choose one of the JSON configurations in `engines/`, then enter altitude and flight Mach number. The preset supplies engine parameters and inlet area.
-- **Compare all engines** — enter altitude and flight Mach number to run every available preset and compare performance in a table.
+- **Select a preset engine** — choose one of the JSON configurations in `engines/`, then enter altitude and flight Mach number. The preset supplies engine parameters and geometry.
+- **Compare engines** — enter altitude and flight Mach number to compare preset performance. See the known limitations below; the current comparison list has an integration issue.
 
 The available JSON presets are:
 
@@ -27,8 +27,9 @@ The available JSON presets are:
 - General Electric J79 (`j79`)
 - Rolls-Royce/Snecma Olympus 593 (`olympus593`)
 - Bristol Siddeley Orpheus (`orpheus`)
+- General Electric J47 GE-25/-27 (`gej47`)
 
-Altitude is intended to be within 0–11,000 m. In preset and comparison modes, engine pressure ratios, design turbine-inlet temperature, component efficiencies, inlet and turbine throat areas, and published airflow reference are loaded from each selected JSON file. Inlet area is retained as a geometric reference; turbine throat area determines modeled mass flow.
+The atmosphere model supports 0–20,000 m. In preset and comparison modes, engine pressure ratios, design turbine-inlet temperature, component efficiencies, inlet and turbine throat areas, and reference data are loaded from each JSON file. Inlet area is retained as a geometric reference; turbine throat area determines modeled mass flow. The current CLI altitude prompts still state an upper limit of 11,000 m.
 
 ## Engine flow
 
@@ -43,7 +44,7 @@ Choose Run Mode -> Custom Values or Load JSON Configuration(s) -> Station 0 -> I
 
 ### Engine Components
 
-- Single-layer ISA troposphere model (intended range: 0–11 km)
+- ISA troposphere and isothermal layer model (0–20 km)
 - Inlet pressure recovery using an inlet efficiency factor
 - Compressor pressure ratio and isentropic efficiency
 - Combustor efficiency and total-pressure loss
@@ -61,6 +62,8 @@ Choose Run Mode -> Custom Values or Load JSON Configuration(s) -> Station 0 -> I
 
 - Mass-flow propagation through the engine
 - Airflow metering from turbine throat area and Station 4 total conditions
+- Compressor and turbine power estimates
+- Fuel-flow calculation
 - Nozzle exit density calculation
 - Nozzle exit area calculation
 
@@ -78,34 +81,35 @@ Choose Run Mode -> Custom Values or Load JSON Configuration(s) -> Station 0 -> I
 - JSON-driven engine parameter loading from `engines/`
 - Runtime selection of a single preset without editing `main.py`
 - Custom engine-parameter entry at runtime
-- Comparison of all seven presets at the same altitude and Mach number
-- Presets for Generic Turbojet, J52, J57, J58, J79, Olympus 593, and Orpheus
+- Presets for Generic Turbojet, J52, J57, J58, J79, Olympus 593, Orpheus, and GE J47
+- Preset comparison output is implemented, but the current engine list contains a malformed entry and does not complete successfully
 
 ## Current Status
 
-In custom and single-preset modes, the program displays Stations 0, 2, 3, 4, 5, and 8, compressor work, momentum thrust, pressure thrust, total thrust, TSFC, and efficiency results. Comparison mode runs all seven presets at the same flight conditions and prints thrust, TSFC, thermal efficiency, propulsive efficiency, overall efficiency, modeled air/exhaust mass flow, and the published airflow reference for each; it suppresses station-by-station output.
+In working custom and single-preset runs, the program displays Stations 0, 2, 3, 4, 5, and 8, compressor work and power, turbine power, fuel flow, momentum thrust, pressure thrust, total thrust, TSFC, and efficiency results. Comparison mode is intended to report performance, modeled air/exhaust mass flow, published airflow, and fuel flow at shared flight conditions; it currently fails before completing the preset list.
 
-Important model limitations:
+Important model limitations and integration issues:
 
-- The atmosphere uses one lapse-rate layer and does not model higher ISA layers
+- The atmosphere does not model ISA layers above 20 km
 - Engine presets are data configurations; accuracy against published engine performance still needs validation
 - The unchoked nozzle warns if its calculated exit Mach number is at least 1, but does not automatically switch back to the choked branch
 - The turbine-throat airflow formula assumes choked, ideal-gas flow at Station 4 and does not independently solve compressor/turbine maps
 - The choked nozzle pressure uses a fixed critical ratio of 1.893, corresponding to air with \(\gamma=1.4\)
 - Current thrust uses momentum and exit-pressure terms; geometry and gas-property idealizations remain
+- The comparison-mode list currently combines `orpheus` and `gej47` into one invalid filename, so the loop eventually attempts to open a nonexistent combined JSON filename. The Generic preset also lacks `published_thrust_n` and `notes`, fields accessed by the single-preset display. These need to be reconciled.
 
-The detailed station-by-station model and recent progress are in [engine_design.md](./engine_design.md). Equations and assumptions are in [equations.md](./equations.md).
+The detailed station-by-station model and recent progress are in [engine_design.md](./engine_design.md). Equations and assumptions are in [equations.md](./equations.md). See the [development log](./DEVELOPMENT_LOG.md), [validation record](./VALIDATION.md), and [changelog](./CHANGELOG.md) for milestones and comparison details.
 
 ## Development Log
 
-### Version 1.3 Progress Update
+### Current Progress Update
 
 #### Major Features Added
 
 - Added JSON engine configurations and runtime engine selection.
-- Added presets for the Generic Turbojet, J52, J57, J58, J79, Olympus 593, and Orpheus.
+- Added presets for the Generic Turbojet, J52, J57, J58, J79, Olympus 593, Orpheus, and GE J47.
 - Added a custom-input mode for engine parameters.
-- Added a comparison mode that evaluates all seven presets at shared altitude and Mach inputs and prints a performance table.
+- Added preset-comparison output for shared altitude and Mach inputs; current preset-list integration still needs correction.
 - Added inlet total-pressure recovery while conserving total temperature.
 - Added nozzle exit density and continuity-based exit area calculations.
 - Added momentum and pressure thrust reporting.
@@ -113,10 +117,13 @@ The detailed station-by-station model and recent progress are in [engine_design.
 - Added turbine throat area and published airflow reference values to the engine configurations.
 - Corrected choked nozzle exit pressure to use the critical pressure ratio.
 - Added effective jet velocity to the thermal and propulsive efficiency calculations.
+- Added the ISA isothermal layer from 11,000 to 20,000 m.
+- Added compressor power, turbine power, and fuel-flow calculations to detailed engine output.
+- Added a General Electric J47 GE-25/-27 preset and a reported independent static thrust comparison.
 
-#### Sea-Level Static Airflow Validation
+#### Sea-Level Static Airflow Checks
 
-At 0 m altitude and Mach 0, the supplied validation results compare turbine-throat-modeled airflow with published reference values:
+At 0 m altitude and Mach 0, the supplied results compare turbine-throat-modeled airflow with published reference values:
 
 | Engine | Model airflow (kg/s) | Published airflow (kg/s) |
 |---|---:|---:|
@@ -127,30 +134,41 @@ At 0 m altitude and Mach 0, the supplied validation results compare turbine-thro
 | Olympus 593 | 185.96 | 185.97 |
 | Orpheus 803 | 38.10 | 38.10 |
 
-The comparisons show close agreement for the listed airflow values, with remaining differences for the J57 and J58. These are airflow checks, not validation of thrust, TSFC, or efficiencies.
+These airflow comparisons are close for most entries, with differences for J57 and J58. They are airflow checks, not validation of thrust, TSFC, or efficiencies.
+
+#### Independent J47 Static Check
+
+The supplied validation result for the General Electric J47 GE-25/-27 at sea-level static conditions is 46.27 kg/s airflow and 26,253 N thrust, compared with references of 46.27 kg/s and 26,556 N. The reported thrust difference is -1.14%. This is a promising single-point check, not broad validation across engines or operating conditions. The current compare-mode list still needs correction before J47 can be run through that mode.
+
+#### Power and Fuel-Flow Reporting
+
+Detailed runs now report compressor power, turbine power, and fuel flow. The supplied J52 example reports compressor and turbine power of 25.713 MW each. Because the turbine temperature drop is calculated from compressor specific work, this matching result is an implementation consistency check, not an independent validation of real-engine power balance.
 
 #### Current Simulator Capability
 
-Atmosphere → Freestream → Inlet → Compressor → Combustor → Turbine-Throat Airflow → Turbine → Nozzle → Geometry Calculations → Momentum Thrust → Pressure Thrust → TSFC → Thermal Efficiency → Propulsive Efficiency → Overall Efficiency → Preset Comparison
+Atmosphere → Freestream → Inlet → Compressor → Combustor → Turbine-Throat Airflow → Turbine → Nozzle → Geometry Calculations → Momentum Thrust → Pressure Thrust → TSFC → Efficiencies → Power/Fuel-Flow Reporting → Preset Comparison
 
 The simulator now supports configurable engine presets and non-ideal component parameter values. It remains a simplified cycle model rather than a validated, geometry-resolved engine performance tool.
 
 ## Next Milestone
 
-Continue validation and calibration against published engine data, starting with thrust discrepancies for the Orpheus 803 and J58, and review turbine work and nozzle-expansion assumptions.
+Continue validation and calibration against published engine data: fix comparison-mode preset integration, validate thrust at matched conditions, investigate Orpheus 803 and J58 discrepancies, and review turbine work and nozzle-expansion assumptions.
 
 ## Future Work
 
 ### High Priority
 
+- Fix comparison-mode handling of the Generic and J47 presets
 - Validate thrust against published values for all engines
 - Investigate remaining Orpheus 803 and J58 thrust discrepancies
 - Verify turbine work and nozzle expansion assumptions
 
 ### Medium Priority
 
-- Add compressor and turbine power calculations
-- Report fuel flow and expand performance reporting
+- Expand station-property and station-area reporting
+- Add flowpath analysis mode
+- Add thrust error reporting
+- Validate thrust predictions at altitude
 
 ### Long-Term
 
