@@ -1,6 +1,6 @@
 # Turbojet Simulator Equation Reference
 
-This document describes equations currently used by the simulator and identifies modeling assumptions and unfinished features. Engine parameters can be entered interactively or loaded from JSON files in `engines/`; comparison mode is intended to apply each preset at the same flight conditions, but currently has a malformed list entry.
+This document describes equations currently used by the simulator and identifies modeling assumptions and unfinished features. Engine parameters can be entered interactively or loaded from JSON files in `engines/`; preset comparison runs all configured engines at the same flight conditions.
 
 Calculations use SI units and ideal-gas properties, with the following defaults on each `Station`:
 
@@ -46,7 +46,7 @@ The implementation rounds \(T\) and \(P\) to two decimal places and \(\rho\) to 
 
 ## Engine Configuration
 
-In preset mode, `main.py` loads the selected `engines/<name>.json` file; comparison mode attempts to load each preset in turn but currently has an invalid combined identifier. The presets currently available are:
+In preset mode, `main.py` loads the selected `engines/<name>.json` file; comparison mode loads each configured preset in turn. The presets currently available are:
 
 - Generic Turbojet
 - Pratt & Whitney J52, J57, and J58
@@ -55,7 +55,44 @@ In preset mode, `main.py` loads the selected `engines/<name>.json` file; compari
 - Rolls-Royce/Snecma Olympus 593
 - Bristol Siddeley Orpheus
 
-The JSON parameters include compressor pressure ratio and efficiency, combustor exit total temperature, combustor efficiency and pressure ratio, turbine efficiency, nozzle efficiency, inlet efficiency, inlet area, turbine throat area, and published reference data. The program supports three workflows: entering component parameters interactively, loading one JSON preset, or attempting to run all presets at the same altitude and Mach number for comparison. The comparison loop does not complete because of a malformed engine identifier; the Generic preset display also lacks metadata keys required by the single-preset display.
+The JSON parameters include compressor pressure ratio and efficiency, combustor exit total temperature, component efficiencies, inlet and turbine throat areas, design Mach numbers, fixed internal areas, and published reference data. The program supports custom input, a single JSON preset, and comparison of all presets. The Generic preset's single-engine information display still accesses `published_thrust_n` and `notes`, which are absent from its configuration.
+
+## Internal Flowpath Sizing and Off-Design Solve
+
+The design Mach targets `M3_design`, `M4_design`, and `M5_design` define preset sizing conditions at the compressor exit, combustor exit, and turbine exit. They are internal design-point targets, not the flight Mach number. Presets store the corresponding areas `A3`, `A4_station`, and `A5`.
+
+For a selected design Mach \(M\), the sizing calculation first derives the static state:
+
+\[
+T = \frac{T_t}{1+\frac{\gamma-1}{2}M^2}, \qquad
+P = \frac{P_t}{\left(1+\frac{\gamma-1}{2}M^2\right)^{\gamma/(\gamma-1)}}
+\]
+
+\[
+\rho=\frac{P}{RT}, \qquad V=M\sqrt{\gamma RT}
+\]
+
+Continuity gives:
+
+\[
+A=\frac{\dot m}{\rho V}
+\]
+
+The equivalent mass-flow parameter is:
+
+\[
+\operatorname{MFP}(M)=M\left(1+\frac{\gamma-1}{2}M^2\right)^{-\frac{\gamma+1}{2(\gamma-1)}}
+\]
+
+\[
+\dot m = \frac{P_t A}{\sqrt{T_t}}\sqrt{\frac{\gamma}{R}}\operatorname{MFP}(M)
+\]
+
+`area_from_mach()` uses the MFP form to size an area from a design Mach. `area_from_design_mach()` uses the static-state and continuity form as a cross-check.
+
+At an off-design condition, `solve_station_flow()` holds the preset area fixed and solves the MFP relation for Mach using bisection. The current search is limited to the subsonic interval \(0\le M\le1\); it reconstructs \(T,P,\rho,a,V\) from the solved Mach and total state. At or above the maximum MFP target it assigns \(M=1\), but does not signal an impossible requested mass flow or solve the supersonic branch.
+
+Preset runs apply this solver at Station 2 using inlet area and at Stations 3–5 using `A3`, `A4_station`, and `A5`. Custom-input mode currently calculates design areas after its cycle run but does not pass them back through the solver. Station 8 total properties are recovered from its exit static values and Mach. The nozzle exit area itself is still recalculated from continuity for each operating point.
 
 ## Freestream / Station 0
 
@@ -243,6 +280,20 @@ Fuel flow is:
 
 Because \(T_{t5}\) is calculated from \(w_c/[c_p(1+f)]\), this implementation makes \(\dot{W}_t\) algebraically equal to \(\dot{W}_c\), subject to rounding. Matching reported powers are an internal consistency check, not an independent validation of a real engine's shaft power.
 
+## Station 8 Stagnation Recovery
+
+The nozzle methods populate Station 8 static exit properties and Mach. The program then obtains total properties from the isentropic stagnation relations:
+
+\[
+T_{t8}=T_8\left(1+\frac{\gamma-1}{2}M_8^2\right)
+\]
+
+\[
+P_{t8}=P_8\left(1+\frac{\gamma-1}{2}M_8^2\right)^{\gamma/(\gamma-1)}
+\]
+
+These are recovered reporting values, not separate outputs from a nozzle-flow solution. In the choked branch with \(\eta_n<1\), the adjusted static temperature, fixed ideal critical exit pressure, and imposed \(M_8=1\) do not generally reconstruct the upstream \(T_{t5}\) and \(P_{t5}\). This is a known consistency question for the current simplified nozzle model.
+
 ## Nozzle / Station 5 → Station 8
 
 The main program checks the ratio of turbine-exit total pressure to ambient pressure:
@@ -373,16 +424,19 @@ V_{\text{eff}}=V_8+\frac{(P_8-P_a)A_8}{\dot{m}_8}
 
 The effective jet velocity folds pressure thrust into the velocity used by both efficiency calculations. These remain simplified performance relations.
 
+Because \(V_a=0\) in a static test, the current propulsive-efficiency relation returns \(\eta_p=0\) by construction. Static thrust and TSFC are more useful metrics there; static \(\eta_p\) and \(\eta_o\) should not be interpreted as positive propulsive performance.
+
 ## Future Improvements
 
-- Validate thrust at matched published conditions and report percentage error
-- Investigate the Orpheus 803 and J58 thrust discrepancies
-- Correct preset comparison integration for the J47 and Generic entries
-- Validate thrust prediction at altitude
-- Calculate additional station areas and support flowpath analysis
-- Add corrected mass flow, compressor and turbine maps, variable geometry, and off-design analysis
-- Improve choking control, nozzle-loss modeling, and input validation
-- Implement higher ISA layers and extend performance modeling to turbofans and afterburners
+- Complete validation of all preset engines.
+- Build an off-design test matrix: Sea Level Static; 11,000 m/Mach 0.85; 18,000 m/Mach 2.0.
+- Investigate corrected airflow methods.
+- Investigate simplified compressor-map modelling.
+- Implement fixed-vs-variable nozzle support.
+- Improve off-design component realism.
+- Continue verification against published engine data.
+- Investigate choking control, nozzle-loss modeling, and input validation.
+- Later: higher ISA layers, turbine maps, turbofans, and afterburners.
 
 ## Simplifying assumptions and limitations
 
@@ -391,6 +445,12 @@ The effective jet velocity folds pressure thrust into the velocity used by both 
 - Inlet, compressor, combustor, turbine, and nozzle use simplified efficiency/pressure-ratio models
 - Component parameters vary by selected JSON engine preset
 - Air mass flow is inferred from an assumed choked turbine throat; the implementation does not verify that this throat is choked
+- `turbine_throat_area` meters flow separately from the Station 4 fixed area `A4_station`; no distinct station is solved for the turbine nozzle-guide-vane throat
+- MFP station solving is subsonic-only; at its choking limit it sets \(M=1\) without reporting a capacity mismatch
+- Internal fixed-area solving is currently applied in preset runs, not custom mode
+- Nozzle exit area is recalculated by continuity at every run; fixed-versus-variable nozzle geometry is not yet implemented
+- The nozzle's choked exit temperature correction and fixed critical pressure ratio can yield recovered Station 8 total properties that differ from Station 5 when nozzle efficiency is below 1
+- Pressure thrust is incorporated into efficiency calculations through an effective-velocity surrogate; its energy-consistency should be checked against the selected efficiency definitions
 - Choked nozzle exit pressure uses a fixed critical ratio of 1.893 for \(\gamma=1.4\)
 - Unchoked nozzle method is implemented, but warns rather than switching branches if \(M_8\ge1\)
 - Thrust includes pressure thrust; other model simplifications remain
@@ -429,10 +489,19 @@ These results validate airflow only at the listed static conditions; thrust, TSF
 
 ## Current Project Update
 
-- Added the ISA isothermal layer from 11,000 to 20,000 m.
-- Added compressor power, turbine power, and fuel-flow calculations to detailed output.
-- Added the General Electric J47 GE-25/-27 preset with reported reference airflow and thrust.
-- Reported independent static J47 result: model airflow 46.27 kg/s and thrust 26,253 N versus reference values of 46.27 kg/s and 26,556 N (reported thrust error: -1.14%).
-- Reported J52 compressor and turbine power: 25.713 MW each. Because the turbine temperature drop is derived directly from compressor specific work, this agreement is an implementation consistency check rather than independent physical validation.
-- The comparison-mode list currently contains the combined string `orpheus, gej47`, which does not match an engine JSON filename. The Generic preset also lacks `published_thrust_n` and `notes`, fields accessed by current display code; preset integration should be corrected before claiming all-engine comparison.
-- Airflow reference agreement does not by itself validate thrust, TSFC, or efficiencies.
+- Added fixed-area MFP station solving and preset design Mach targets.
+- Added and locally checked J47/J52 design areas and off-design cases; continuity/MFP area differences are at floating-point roundoff scale.
+- Current local static J47 prediction is 26,252.80 N versus 26,556 N reference (-1.14%).
+- Current local static J52 prediction is 42,325.29 N versus 49,820 N preset reference (-15.04%), despite modeled air flow matching the reference.
+- The comparison mode completes for the eight configured presets; the Generic single-preset information display still lacks two metadata keys.
+- Airflow and equation cross-checks do not independently validate thrust, TSFC, or efficiency.
+
+## Next Development Priorities
+
+1. Complete validation of all preset engines.
+2. Build an off-design test matrix: Sea Level Static; 11,000 m/Mach 0.85; 18,000 m/Mach 2.0.
+3. Investigate corrected airflow methods.
+4. Investigate simplified compressor-map modelling.
+5. Implement fixed-vs-variable nozzle support.
+6. Improve off-design component realism.
+7. Continue verification against published engine data.

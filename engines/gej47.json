@@ -19,5 +19,12 @@
     "published_mdot": 46.27,
     "published_thrust_n": 26556.0,
 
+    "M3_design": 0.25,
+    "M4_design": 0.08,
+    "M5_design": 0.35,
+    "A3": 0.11776,
+    "A4_station":  0.56401, 
+    "A5": 0.30589,
+
     "notes": "Verified OPR (5.35:1), airflow (102 lb/s / 46.27 kg/s), and dry thrust (5,970 lbf / 26,556 N) from J47-GE-25/-27 specs. Late-1940s 12-stage single-spool axial turbojet."
 }

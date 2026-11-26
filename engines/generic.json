@@ -18,5 +18,13 @@
 
     "turbine_throat_area": 0.060,
 
-    "published_mdot": 70.00
+    "published_mdot": 70.00,
+
+    "M3_design": 0.25,
+    "M4_design": 0.08,
+    "M5_design": 0.35,
+
+    "A3": 0.09120,
+    "A4_station": 0.38900, 
+    "A5": 0.38125
 }

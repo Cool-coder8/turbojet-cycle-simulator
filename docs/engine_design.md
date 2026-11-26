@@ -1,6 +1,6 @@
 # Turbojet Simulator Design
 
-This document describes the current component flow and calculations. See [equations.md](./equations.md) for the corresponding relations and assumptions.
+This document describes the current component flow and calculations. See [equations.md](../physics/equations.md) for the corresponding relations and assumptions.
 
 ## Engine flow
 
@@ -13,17 +13,17 @@ Station 2
     ↓
 Compressor
     ↓
-Station 3
+Station 3 (fixed-area flow solve)
     ↓
 Combustor
     ↓
-Station 4
+Station 4 (fixed-area flow solve)
     ↓
 Turbine-throat airflow calculation
     ↓
 Turbine
     ↓
-Station 5
+Station 5 (fixed-area flow solve)
     ↓
 Nozzle
     ↓
@@ -36,7 +36,7 @@ At startup, `main.py` offers three run modes:
 
 1. **Custom values:** prompts for inlet, compressor, combustor, turbine, and nozzle parameters, as well as inlet area, turbine throat area, Mach number, and altitude.
 2. **Single preset:** loads one JSON configuration from `engines/`, then prompts for altitude and Mach number. The preset supplies inlet and turbine throat areas and component parameters.
-3. **Compare presets:** intended to load each engine JSON file in turn, run the same altitude and Mach inputs, and print a table of performance results. The current list has a malformed combined `orpheus, gej47` entry, so the loop does not complete and omits the J47. Separately, the Generic preset lacks `published_thrust_n` and `notes`, fields required by the single-preset information display.
+3. **Compare presets:** loads each engine JSON file in turn, runs the same altitude and Mach inputs, and prints a performance table. The current list includes all eight configured engines. The Generic preset still lacks `published_thrust_n` and `notes`, fields required by the single-preset information display.
 
 For preset runs, compressor ratio, design \(T_{t4}\), component efficiencies, combustor pressure ratio, inlet area, turbine throat area, and published airflow reference come from the JSON configuration. Turbine throat area sets modeled airflow; inlet area is retained as a geometric reference.
 
@@ -55,7 +55,45 @@ The current engine database contains:
 | `orpheus` | Bristol Siddeley Orpheus |
 | `gej47` | General Electric J47 GE-25/-27 |
 
-Each JSON file supplies the engine name, compressor pressure ratio and efficiency, combustor exit total temperature, combustor efficiency and pressure ratio, turbine efficiency, nozzle efficiency, inlet efficiency, inlet area, turbine throat area, published mass-flow reference, and (where supplied) published thrust and notes. Airflow is compared with published references; thrust and other performance metrics still require validation at matched operating points.
+Each JSON file supplies the engine name, compressor pressure ratio and efficiency, combustor exit total temperature, combustor efficiency and pressure ratio, turbine efficiency, nozzle efficiency, inlet efficiency, inlet area, turbine throat area, design Mach numbers, and fixed internal areas. Published mass-flow and (where supplied) thrust and notes are also included. Airflow is compared with published references; thrust and other performance metrics still require validation at matched operating points.
+
+## Design Mach Philosophy and Internal Flowpath Sizing
+
+The preset fields `M3_design`, `M4_design`, and `M5_design` are target Mach numbers used to size the compressor-exit, combustor-exit, and turbine-exit flow stations. They describe the selected design point for each engine's internal passages; they are not flight Mach numbers or results imposed at every operating condition. Current presets use low-subsonic targets (typically 0.25/0.08/0.35 or 0.30/0.10/0.45).
+
+For each design station, the cycle model first supplies mass flow and total pressure/temperature. Given the target Mach, the code derives static properties from ideal-gas isentropic relations:
+
+\[
+T = \frac{T_t}{1+\frac{\gamma-1}{2}M^2}, \qquad
+P = \frac{P_t}{\left(1+\frac{\gamma-1}{2}M^2\right)^{\gamma/(\gamma-1)}}
+\]
+
+\[
+\rho=\frac{P}{RT}, \qquad V=M\sqrt{\gamma RT}
+\]
+
+Continuity gives the physical flow area:
+
+\[
+A=\frac{\dot m}{\rho V}
+\]
+
+The equivalent mass-flow-parameter (MFP) area relation used by `area_from_mach()` is:
+
+\[
+\dot m = \frac{P_t A}{\sqrt{T_t}}\sqrt{\frac{\gamma}{R}}\;
+M\left(1+\frac{\gamma-1}{2}M^2\right)^{-\frac{\gamma+1}{2(\gamma-1)}}
+\]
+
+The resulting `A3`, `A4_station`, and `A5` values are stored in each engine JSON file. For preset runs these are fixed physical areas. `solve_station_flow()` receives mass flow, total state, and area; it numerically inverts the MFP function to find the station Mach and then fills static temperature, pressure, density, velocity, and area.
+
+`turbine_throat_area` is a separate input used to meter total core flow from Station 4 total conditions. It is not the same parameter as `A4_station`: the latter is the combustor-exit flow area used by the internal station solver, while the throat represents a restriction in the turbine nozzle-guide-vane region. The code does not currently create a separate station for that throat, so the relationship between the metering area and turbine passage geometry should be independently checked.
+
+The current inversion uses bisection over \(0\le M\le1\), i.e. the subsonic branch. When the target reaches the maximum MFP near Mach 1, the implementation sets \(M=1\). It does not report a capacity mismatch if the target exceeds the choked limit and does not solve a supersonic branch or shock system.
+
+The preset path runs this solve for Station 2 using the inlet area and Stations 3–5 using the fixed internal areas. Station 8 total properties are recovered from its nozzle exit static state and Mach number. In custom-input mode, the code currently calculates design areas after the cycle run but does not pass them back into `run_engine()` to solve the internal station states.
+
+An area cross-check compares `area_from_mach()` with `area_from_design_mach()`, which applies continuity directly. In the current J47/J52 runs the difference is at floating-point roundoff scale. This is a numerical consistency check, not validation of the chosen design Mach values against measured engine geometry.
 
 ## Stations and components
 
@@ -134,6 +172,7 @@ Known properties:
 - \(P_{t3}\)
 - \(T_{t3}\)
 - Mass flow rate
+- With preset geometry enabled: static \(T_3\), \(P_3\), \(\rho_3\), velocity, Mach number, and fixed area \(A_3\)
 
 Used by:
 
@@ -180,6 +219,7 @@ Known properties:
 - \(T_{t4}\)
 - Fuel-air ratio \(f\)
 - Air-plus-fuel mass flow rate
+- With preset geometry enabled: static \(T_4\), \(P_4\), \(\rho_4\), velocity, Mach number, and fixed area \(A_{4,\mathrm{station}}\)
 
 ### Turbine — Station 4 → Station 5
 
@@ -220,6 +260,7 @@ Known properties:
 - \(T_{t5}\)
 - Fuel-air ratio \(f\)
 - Air-plus-fuel mass flow rate
+- With preset geometry enabled: static \(T_5\), \(P_5\), \(\rho_5\), velocity, Mach number, and fixed area \(A_5\)
 
 ### Core power and fuel flow
 
@@ -293,6 +334,7 @@ Known properties:
 - Fuel-air ratio \(f\)
 - Exit density \(\rho_8\)
 - Exit area \(A_8\)
+- Total temperature and pressure are recovered from exit static properties and Mach using the ideal-gas stagnation relations. They are not independent nozzle-solver outputs.
 
 ## Engine Performance
 
@@ -339,6 +381,8 @@ V_{\text{eff}} = V_8 + \frac{(P_8-P_a)A_8}{\dot{m}_8}
 
 The effective jet velocity folds pressure thrust into the velocity used by both efficiency calculations. These remain simplified performance relations.
 
+At sea-level static conditions \(V_a=0\), the current propulsive-efficiency formula therefore returns zero by construction. Treat static thrust and TSFC as the useful comparisons at that operating point; the reported static \(\eta_p\) and \(\eta_o\) do not provide a useful positive efficiency metric.
+
 ## Station data
 
 `Station` provides fields for static and total thermodynamic properties, flow properties, gas properties, geometry, and fuel-air ratio. New stations default to \(\gamma=1.4\), \(c_p=1004\ \text{J/(kg·K)}\), and \(R=287\ \text{J/(kg·K)}\). Components explicitly propagate only the properties they use.
@@ -354,6 +398,9 @@ The effective jet velocity folds pressure thrust into the velocity used by both 
 - Component efficiencies and burner pressure ratio are entered interactively in custom mode or loaded from the selected engine preset
 - Fuel mass is included in turbine flow and Station 8 mass flow
 - Both choked and unchoked nozzle calculations are implemented; the unchoked method warns rather than automatically changing branches if \(M_e\ge1\)
+- Preset runs solve fixed internal areas at Stations 2–5; nozzle exit area remains recalculated from continuity
+- The station MFP inversion only solves the subsonic branch and clamps to \(M=1\) at its choking limit
+- The turbine throat used for flow metering is not explicitly solved as one of Stations 2–5; its relation to `A4_station` should be verified as separate physical planes
 - Thrust includes pressure thrust
 
 ## Current Simulator Capability
@@ -373,7 +420,8 @@ Implemented:
 - ✅ Momentum and pressure thrust
 - ✅ Thrust, TSFC, thermal efficiency, propulsive efficiency, and overall efficiency
 - ✅ Compressor power, turbine power, and fuel-flow reporting
-- ✅ Custom engine input, single-preset runs, and preset comparison output (with current integration defects noted below)
+- ✅ Fixed-area internal flowpath sizing and off-design station solving for preset runs
+- ✅ Custom engine input, single-preset runs, and preset comparison output
 
 ## Recent Progress
 
@@ -414,7 +462,7 @@ These are airflow comparisons only; thrust, TSFC, and efficiency still require v
 
 #### Current Simulator Capability
 
-Atmosphere → Freestream → Inlet → Compressor → Combustor → Turbine-Throat Airflow → Turbine → Nozzle → Geometry Calculations → Momentum Thrust → Pressure Thrust → TSFC → Thermal Efficiency → Propulsive Efficiency → Overall Efficiency → Power/Fuel-Flow Reporting → Preset Comparison (incomplete)
+Atmosphere → Freestream → Inlet → Compressor → Combustor → Turbine-Throat Airflow → Turbine → Fixed-Area Internal Flowpath Solves → Nozzle → Geometry Calculations → Momentum Thrust → Pressure Thrust → TSFC → Efficiencies → Power/Fuel-Flow Reporting → Preset Comparison
 
 Current project phase: validation and calibration rather than new feature implementation.
 
@@ -449,7 +497,7 @@ The supplied GE J47 GE-25/-27 result is 26,253 N versus a reference value of 26,
 
 #### Known Preset Integration Limitation
 
-The preset selection prompt lists `gej47`, and a J47 JSON file exists. However, the comparison-mode list contains `"orpheus, gej47"` as one string rather than two engine identifiers. In addition, the Generic preset lacks `published_thrust_n` and `notes`, fields accessed by the engine display function. Comparison and Generic-preset display need integration fixes before all presets can be considered operational.
+The comparison-mode list currently includes the eight JSON presets and completes in a local sea-level-static smoke run. The Generic preset still lacks `published_thrust_n` and `notes`, fields accessed by the single-preset information display, so Generic selection in that mode needs a metadata guard or completed preset metadata.
 
 #### Validation Roadmap
 
@@ -457,7 +505,7 @@ The preset selection prompt lists `gej47`, and a J47 JSON file exists. However, 
 - Investigate Orpheus 803 and J58 thrust discrepancies.
 - Verify turbine work and nozzle expansion assumptions.
 - Verify thrust prediction at altitude and add thrust-error reporting.
-- Expand station areas and flowpath analysis.
+- Validate generated station areas and off-design station states against engine data.
 
 ### Nozzle Improvements
 
@@ -525,25 +573,15 @@ T_{t2}=T_{t0}
 
 This models stagnation-pressure loss while maintaining total temperature.
 
-## Future Work
+## Next Development Priorities
 
-### High Priority
-
-- Fix comparison-mode handling of the Generic and J47 presets
-- Validate thrust against published values for all engines
-- Investigate remaining Orpheus 803 and J58 thrust discrepancies
-- Verify turbine work and nozzle expansion assumptions
-- Verify thrust predictions at altitude and report thrust error
-
-### Medium Priority
-
-- Expand station-property and station-area calculations
-- Add flowpath analysis mode
-
-### Long-Term
-
-- Compressor and turbine maps
-- Corrected mass flow
-- Variable-geometry systems
-- Off-design performance analysis
-- Turbofan architecture and afterburner support
+1. Complete validation of all preset engines.
+2. Build an off-design test matrix:
+   - Sea Level Static
+   - 11,000 m, Mach 0.85
+   - 18,000 m, Mach 2.0
+3. Investigate corrected airflow methods.
+4. Investigate simplified compressor-map modelling.
+5. Implement fixed-vs-variable nozzle support.
+6. Improve off-design component realism.
+7. Continue verification against published engine data.

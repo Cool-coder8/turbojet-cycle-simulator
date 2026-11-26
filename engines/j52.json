@@ -22,5 +22,13 @@
 
     "published_thrust_n": 49820.0,
 
+    "M3_design": 0.25,
+    "M4_design": 0.08,
+    "M5_design": 0.35,
+
+    "A3": 0.06950,
+    "A4_station":  0.29940, 
+    "A5": 0.29320,
+
     "notes": "Verified OPR (14.6:1 for P-408; 12.0:1 on earlier P-6/P-8 models). TT4 (1220 K) is thermodynamically back-calculated from published thrust (11,200 lbf) and TSFC (0.79)."
 }

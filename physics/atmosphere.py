@@ -1,6 +1,5 @@
 # atmosphere.py
 import math
-from station import Station
 
 def isa_atmosphere(altitude):
     if altitude >= 0 and altitude <= 11000:

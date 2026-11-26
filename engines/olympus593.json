@@ -22,5 +22,13 @@
 
     "published_thrust_n": 139452.0,
 
+    "M3_design": 0.30,
+    "M4_design": 0.10,
+    "M5_design": 0.45,
+
+    "A3": 0.16269,
+    "A4_station":  0.6996, 
+    "A5": 0.58044,
+
     "notes": "Verified static OPR (15.5:1; drops to ~11.3 at Mach 2 cruise). Cruise TT4 is 1355 K (1,980 F); peak takeoff TT4 reaches 1723 K (1,450 C) with air-cooled turbine blades."
 }

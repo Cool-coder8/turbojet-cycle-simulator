@@ -1,12 +1,14 @@
 import math
-from station import Station
-from inlet import Inlet
-from compressor import Compressor
-from combustor import Combustor
-from turbine import Turbine
-from nozzle import Nozzle
-from atmosphere import isa_atmosphere
 import json
+
+from components.station import Station
+from components.inlet import Inlet
+from components.compressor import Compressor
+from components.combustor import Combustor
+from components.turbine import Turbine
+from components.nozzle import Nozzle
+from physics.atmosphere import isa_atmosphere
+from physics.flow import solve_station_flow, area_from_mach
 
 
 def print_engine_info(engine):
@@ -21,7 +23,7 @@ def print_engine_info(engine):
     print(f"Published Airflow: {engine['published_mdot']} kg/s\n")
     print(f"Notes: \n {engine["notes"]} \n")
 
-def run_engine(inlet, compressor, combustor, turbine, nozzle, area, A4, mach, T, P, rho, display):
+def run_engine(inlet, compressor, combustor, turbine, nozzle, area, A4, mach, T, P, rho, display, A3=None, A4_station=None, A5=None):
     station0 = Station(0)
     station0.area = area
     station0.T = T
@@ -32,7 +34,7 @@ def run_engine(inlet, compressor, combustor, turbine, nozzle, area, A4, mach, T,
     speed_of_sound(station0)
     air_v(station0)
     stag_temp_pressure(station0)
-    #station0.mdot = round(station0.rho * station0.airvelocity * station0.area, 2)  # is constant throughout engine, so initial mass flow rate is the same as the final mass flow rate, so we can just calculate it here and use it for all stations
+    #station0.mdot = round(station0.rho * station0.airvelocity * station0.area, 2)  # not using this anymore, cos i have a new way of calculating mdot
     station2 = inlet.calculate(station0)
     station3 = compressor.calculate(station2)
     station4 = combustor.calculate(station3)
@@ -43,6 +45,13 @@ def run_engine(inlet, compressor, combustor, turbine, nozzle, area, A4, mach, T,
     station4.mdot = mdot4
 
     station5 = turbine.calculate(station4, compressor.work)
+
+    if A3 is not None:
+        solve_station_flow(station2, station2.mdot, station2.area)
+        solve_station_flow(station3,station3.mdot,A3)
+        solve_station_flow(station4,station4.mdot,A4_station)
+        solve_station_flow(station5,station5.mdot,A5)
+
     compressor_power = station3.mdot * compressor.work
     compressor_power_MW = compressor_power / 1e6
     turbine_work = (station5.cp)*(station4.Tt-station5.Tt)
@@ -56,6 +65,7 @@ def run_engine(inlet, compressor, combustor, turbine, nozzle, area, A4, mach, T,
         choked = True
         station8 = nozzle.calculate_choked(station5)
         station8.M = 1 #assuming converging nozzle
+        station8.a = station8.airvelocity/station8.M
     else:
         choked = False
         station8 = nozzle.calculate_unchoked(station5, station0.P)
@@ -103,7 +113,10 @@ def run_engine(inlet, compressor, combustor, turbine, nozzle, area, A4, mach, T,
         "pressure_thrust": pressure_thrust,
         "mdot_air": station0.mdot,
         "mdot_exh": station8.mdot,
-        "fuel_flow": fuel_flow
+        "fuel_flow": fuel_flow,
+        "station3": station3,
+        "station4": station4,
+        "station5": station5
     }
         
 def speed_of_sound(station0):  #calcs  speed of sound at a temp
@@ -128,6 +141,49 @@ def calc_airflow_from_turbine_throat(station4, A4):
     mdot0 = mdot4 / (1 + station4.f)
 
     return mdot0, mdot4
+
+
+# used this function to validate area from norm calcs and against calcs from mfp, so im not really using this anymore
+def validate_areas(station3, station4, station5, engine):
+
+    A3 = area_from_mach(
+        station3.mdot,
+        station3.Pt,
+        station3.Tt,
+        engine["M3_design"],
+        station3.gamma,
+        station3.R
+    )
+
+    A4_station = area_from_mach(
+        station4.mdot,
+        station4.Pt,
+        station4.Tt,
+        engine["M4_design"],
+        station4.gamma,
+        station4.R
+    )
+
+    A5 = area_from_mach(
+        station5.mdot,
+        station5.Pt,
+        station5.Tt,
+        engine["M5_design"],
+        station5.gamma,
+        station5.R
+    )
+
+    print("\nGenerated Areas")
+    print(f"A3 = {A3:.5f} m²")
+    print(f"A4_station = {A4_station:.5f} m²")
+    print(f"A5 = {A5:.5f} m²")
+
+    return A3, A4_station, A5
+
+
+
+    
+
 mode = int(input("Pick a Mode: \n1.Plug in your own engine values \n2.Select a preset engine\n3.Compare all Engines & Performance\n: "))
 
 if mode == 1:
@@ -145,7 +201,20 @@ if mode == 1:
     A4 = float(input("Enter Turbine Throat Area: "))
     altitude = int(input("Enter altitude (m): from 0-11000): ")) #at some point have this be in the function TODO
     T, P, rho = isa_atmosphere(altitude)
-    run_engine(inlet, compressor, combustor, turbine, nozzle, area, A4, mach, T, P, rho, display=True)
+    results = run_engine(inlet, compressor, combustor, turbine, nozzle, area, A4, mach, T, P, rho, display=True)
+    station3 = results["station3"]
+    station4 = results["station4"]
+    station5 = results["station5"]
+    M3_design = 0.25
+    M4_design = 0.08
+    M5_design = 0.35
+    A3 = area_from_mach(station3.mdot,station3.Pt,station3.Tt,M3_design,station3.gamma,station3.R)
+    A4_station = area_from_mach(station4.mdot,station4.Pt,station4.Tt,M4_design,station4.gamma,station4.R)
+    A5 = area_from_mach(station5.mdot,station5.Pt,station5.Tt,M5_design,station5.gamma,station5.R)
+    print("\nGenerated Geometry")
+    print(f"A3 = {A3:.5f} m²")
+    print(f"A4_station = {A4_station:.5f} m²")
+    print(f"A5 = {A5:.5f} m²")
 
 
     
@@ -177,15 +246,20 @@ elif mode == 2:
 
     A4 = engine["turbine_throat_area"]
 
+    A3 = engine["A3"]
+    A4_station = engine["A4_station"]
+    A5 = engine["A5"]
+
     print_engine_info(engine)
     altitude = int(input("Enter altitude (m): from 0-11000): "))
     mach = float(input("Enter Mach number: "))  # asummed 0.8 up until now, but will be user input later
 
     T, P, rho = isa_atmosphere(altitude)
-    run_engine(inlet, compressor, combustor, turbine, nozzle, area, A4, mach, T, P, rho, display=True)
+    results = run_engine(inlet, compressor, combustor, turbine, nozzle, area, A4, mach, T, P, rho, display=True, A3=A3, A4_station=A4_station, A5=A5)
+    #validate_areas(results["station3"],results["station4"],results["station5"],engine)
 
 elif mode ==3:
-    engines_list = ["generic", "j52", "j57", "j58", "j79", "olympus593", "orpheus, gej47"]
+    engines_list = ["generic", "j52", "j57", "j58", "j79", "olympus593", "orpheus", "gej47"]
     altitude = int(input("Enter altitude (m): from 0-11000): "))
     mach = float(input("Enter Mach number: "))  # asummed 0.8 up until now, but will be user input later
     print(f"{'Engine':38}"f"{'Thrust':>10}"f"{'TSFC':>8}"f"{'ηth':>7}"f"{'ηp':>7}"f"{'ηo':>7}"f"{'(ṁ)air':>10}"f"{'(ṁ)exh':>10}"f"{'SLS(ṁ)':>9}"f"{'(ṁ)fuel':>10}")
@@ -216,5 +290,10 @@ elif mode ==3:
         
         area = engine["inlet_area"]
         A4 = engine["turbine_throat_area"]
-        results = run_engine(inlet, compressor, combustor, turbine, nozzle, area, A4, mach, T, P, rho, display=False)
+
+        A3 = engine["A3"]
+        A4_station = engine["A4_station"]
+        A5 = engine["A5"]
+
+        results = run_engine(inlet, compressor, combustor, turbine, nozzle, area, A4, mach, T, P, rho, display=False, A3=A3, A4_station=A4_station, A5=A5)
         print(f"{engine['name']:38}"f"{results['thrust']:10.1f}"f"{results['sfc']:8.4f}"f"{results['nth']*100:7.2f}"f"{results['np']*100:7.2f}"f"{results['overall_efficiency']*100:7.2f}"f"{results['mdot_air']:10.2f}"f"{results['mdot_exh']:10.2f}"f"{engine['published_mdot']:9.2f}"f"{results['fuel_flow']:10.2f}")

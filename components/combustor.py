@@ -1,5 +1,4 @@
-from station import Station
-import math
+from .station import Station
 
 
 class Combustor:

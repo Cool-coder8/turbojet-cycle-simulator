@@ -22,5 +22,13 @@
 
     "published_thrust_n": 52800.0,
 
+    "M3_design": 0.30,
+    "M4_design": 0.10,
+    "M5_design": 0.45,
+
+    "A3": 0.07478,
+    "A4_station":  0.30739, 
+    "A5": 0.28854,
+
     "notes": "Verified OPR (13.5:1) and TT4 (1,710 F / 1210 K) from J79-GE-17 specs. Single-spool with variable stator vanes; efficiencies are 1960s axial baselines."
 }

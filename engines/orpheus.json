@@ -20,7 +20,15 @@
 
     "published_mdot": 38.10,
 
-    "published_thrust_n": 18683.0, 
+    "published_thrust_n": 18683.0,
+    
+    "M3_design": 0.25,
+    "M4_design": 0.08,
+    "M5_design": 0.35,
+
+    "A3": 0.11305,
+    "A4_station":  0.50367, 
+    "A5": 0.2863,
 
     "notes": "Verified OPR (4.4:1) and max continuous TT4 (640 C / 913 K; takeoff peak ~1050 K). Simple 7-stage single-spool axial compressor with single-stage turbine."
 }

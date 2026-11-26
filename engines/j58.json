@@ -22,5 +22,13 @@
 
     "published_thrust_n": 106312.0,
 
+    "M3_design": 0.30,
+    "M4_design": 0.10,
+    "M5_design": 0.45,
+
+    "A3": 0.19542,
+    "A4_station":  0.92736, 
+    "A5": 0.5381,
+
     "notes": "Verified takeoff OPR (8.8:1) and max TT4 (2,000 F / 1366 K). Note: Above Mach 2.2, 4th-stage compressor bleed bypasses core directly to afterburner."
 }

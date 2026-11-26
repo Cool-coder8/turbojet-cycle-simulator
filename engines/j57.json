@@ -22,5 +22,13 @@
     
     "published_thrust_n": 45372.0,
 
+    "M3_design": 0.25,
+    "M4_design": 0.08,
+    "M5_design": 0.35,
+
+    "A3": 0.09120,
+    "A4_station": 0.38900, 
+    "A5": 0.38125,
+
     "notes": "Verified OPR (11.5–13.0 depending on variant, 12.5 nominal) and TT4 (1150 K) from J57-P-21/23 data. Component efficiencies are 1950s two-spool axial baselines."
 }
